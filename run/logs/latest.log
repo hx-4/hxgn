@@ -1,0 +1,124 @@
+[20:22:47] [main/INFO] (FabricLoader/GameProvider) Loading Minecraft 1.21.4 with Fabric Loader 0.17.2
+[20:22:47] [main/INFO] (FabricLoader) Loading 7 mods:
+	- fabric-resource-loader-v0 3.0.11+b1caf1e904
+	- fabricloader 0.17.2
+	- hxgn 1.0.0
+	- java 21
+	- meteor-client 1.21.4-42
+	- minecraft 1.21.4
+	- mixinextras 0.5.0
+[20:22:47] [main/INFO] (FabricLoader/Mixin) SpongePowered MIXIN Subsystem Version=0.8.7 Source=file:/C:/Users/Admin/.gradle/caches/modules-2/files-2.1/net.fabricmc/sponge-mixin/0.16.3+mixin.0.8.7/3e535042688d1265447e52ad86950b7d9678a5fa/sponge-mixin-0.16.3+mixin.0.8.7.jar Service=Knot/Fabric Env=CLIENT
+[20:22:47] [main/INFO] (FabricLoader/Mixin) Loaded Fabric development mappings for mixin remapper!
+[20:22:47] [main/INFO] (FabricLoader/Mixin) Compatibility level set to JAVA_21
+[20:22:48] [main/WARN] (FabricLoader/Mixin) Error loading class: baritone/command/defaults/ComeCommand (java.lang.ClassNotFoundException: baritone/command/defaults/ComeCommand)
+[20:22:48] [main/WARN] (FabricLoader/Mixin) @Mixin target baritone.command.defaults.ComeCommand was not found meteor-client-baritone.mixins.json:ComeCommandMixin from mod meteor-client
+[20:22:48] [main/INFO] (FabricLoader/MixinExtras|Service) Initializing MixinExtras via com.llamalad7.mixinextras.service.MixinExtrasServiceImpl(version=0.5.0).
+[20:22:50] [Datafixer Bootstrap/INFO] (Minecraft) 243 Datafixer optimizations took 875 milliseconds
+[20:22:57] [Render thread/INFO] (Minecraft) Environment: Environment[sessionHost=https://sessionserver.mojang.com, servicesHost=https://api.minecraftservices.com, name=PROD]
+[20:22:57] [Render thread/INFO] (Minecraft) Setting user: Player446
+[20:22:57] [Render thread/INFO] (Minecraft) Backend library: LWJGL version 3.3.3-snapshot
+[20:22:58] [Render thread/INFO] (Minecraft) Reloading ResourceManager: vanilla, fabric, fabric-resource-loader-v0, fabricloader, meteor-client
+[20:22:59] [Render thread/INFO] (Meteor Client) Initializing Meteor Client
+[20:22:59] [Worker-Main-5/INFO] (Minecraft) Found unifont_all_no_pua-16.0.01.hex, loading
+[20:22:59] [Worker-Main-5/INFO] (Minecraft) Found unifont_jp_patch-16.0.01.hex, loading
+[20:22:59] [Render thread/INFO] (Reflections) Reflections took 542 ms to scan 1 urls, producing 24 keys and 955 values
+[20:22:59] [Render thread/INFO] (Reflections) Reflections took 43 ms to scan 1 urls, producing 0 keys and 0 values
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font CaskaydiaCove NF Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\Caskaydia Cove Nerd Font Complete Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono NFM Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono ExtraLight Italic Nerd Font Complete Mono Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono Nerd Font Mono Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono ExtraLight Italic Nerd Font Complete Mono.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono NF Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono ExtraLight Italic Nerd Font Complete Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono Nerd Font Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono ExtraLight Italic Nerd Font Complete.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono NFM Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono ExtraLight Nerd Font Complete Mono Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono Nerd Font Mono Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono ExtraLight Nerd Font Complete Mono.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono NF Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono ExtraLight Nerd Font Complete Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono Nerd Font Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono ExtraLight Nerd Font Complete.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono NFM Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono Italic Nerd Font Complete Mono Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono Nerd Font Mono Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono Italic Nerd Font Complete Mono.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono NF Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono Italic Nerd Font Complete Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono Nerd Font Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono Italic Nerd Font Complete.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono NFM Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono Light Italic Nerd Font Complete Mono Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono Nerd Font Mono Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono Light Italic Nerd Font Complete Mono.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono NF Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono Light Italic Nerd Font Complete Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono Nerd Font Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono Light Italic Nerd Font Complete.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono NFM Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono Light Nerd Font Complete Mono Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono Nerd Font Mono Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono Light Nerd Font Complete Mono.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono NF Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono Light Nerd Font Complete Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono Nerd Font Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono Light Nerd Font Complete.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono NFM Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono Medium Italic Nerd Font Complete Mono Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono Nerd Font Mono Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono Medium Italic Nerd Font Complete Mono.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono NF Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono Medium Italic Nerd Font Complete Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono Nerd Font Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono Medium Italic Nerd Font Complete.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono NFM Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono Medium Nerd Font Complete Mono Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono Nerd Font Mono Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono Medium Nerd Font Complete Mono.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono NF Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono Medium Nerd Font Complete Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono Nerd Font Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono Medium Nerd Font Complete.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL NFM Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL ExtraLight Italic Nerd Font Complete Mono Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL Nerd Font Mono Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL ExtraLight Italic Nerd Font Complete Mono.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL NF Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL ExtraLight Italic Nerd Font Complete Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL Nerd Font Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL ExtraLight Italic Nerd Font Complete.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL NFM Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL ExtraLight Nerd Font Complete Mono Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL Nerd Font Mono Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL ExtraLight Nerd Font Complete Mono.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL NF Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL ExtraLight Nerd Font Complete Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL Nerd Font Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL ExtraLight Nerd Font Complete.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL NFM Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL Italic Nerd Font Complete Mono Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL Nerd Font Mono Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL Italic Nerd Font Complete Mono.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL NF Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL Italic Nerd Font Complete Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL Nerd Font Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL Italic Nerd Font Complete.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL NFM Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL Light Italic Nerd Font Complete Mono Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL Nerd Font Mono Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL Light Italic Nerd Font Complete Mono.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL NF Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL Light Italic Nerd Font Complete Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL Nerd Font Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL Light Italic Nerd Font Complete.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL NFM Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL Light Nerd Font Complete Mono Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL Nerd Font Mono Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL Light Nerd Font Complete Mono.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL NF Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL Light Nerd Font Complete Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL Nerd Font Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL Light Nerd Font Complete.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL NFM Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL Medium Italic Nerd Font Complete Mono Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL Nerd Font Mono Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL Medium Italic Nerd Font Complete Mono.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL NF Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL Medium Italic Nerd Font Complete Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL Nerd Font Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL Medium Italic Nerd Font Complete.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL NFM Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL Medium Nerd Font Complete Mono Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL Nerd Font Mono Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL Medium Nerd Font Complete Mono.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL NF Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL Medium Nerd Font Complete Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL Nerd Font Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL Medium Nerd Font Complete.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL NFM Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL Regular Nerd Font Complete Mono Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL Nerd Font Mono Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL Regular Nerd Font Complete Mono.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL NF Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL Regular Nerd Font Complete Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL Nerd Font Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL Regular Nerd Font Complete.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL NFM Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL SemiBold Italic Nerd Font Complete Mono Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL Nerd Font Mono Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL SemiBold Italic Nerd Font Complete Mono.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL NF Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL SemiBold Italic Nerd Font Complete Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL Nerd Font Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL SemiBold Italic Nerd Font Complete.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL NFM Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL SemiBold Nerd Font Complete Mono Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL Nerd Font Mono Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL SemiBold Nerd Font Complete Mono.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL NF Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL SemiBold Nerd Font Complete Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL Nerd Font Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL SemiBold Nerd Font Complete.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL NFM Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL Thin Italic Nerd Font Complete Mono Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL Nerd Font Mono Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL Thin Italic Nerd Font Complete Mono.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL NF Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL Thin Italic Nerd Font Complete Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL Nerd Font Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL Thin Italic Nerd Font Complete.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL NFM Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL Thin Nerd Font Complete Mono Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL Nerd Font Mono Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL Thin Nerd Font Complete Mono.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL NF Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL Thin Nerd Font Complete Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMonoNL Nerd Font Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono NL Thin Nerd Font Complete.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono NFM Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono Regular Nerd Font Complete Mono Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono Nerd Font Mono Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono Regular Nerd Font Complete Mono.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono NF Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono Regular Nerd Font Complete Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono Nerd Font Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono Regular Nerd Font Complete.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono NFM Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono SemiBold Italic Nerd Font Complete Mono Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono Nerd Font Mono Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono SemiBold Italic Nerd Font Complete Mono.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono NF Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono SemiBold Italic Nerd Font Complete Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono Nerd Font Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono SemiBold Italic Nerd Font Complete.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono NFM Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono SemiBold Nerd Font Complete Mono Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono Nerd Font Mono Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono SemiBold Nerd Font Complete Mono.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono NF Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono SemiBold Nerd Font Complete Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono Nerd Font Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono SemiBold Nerd Font Complete.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono NFM Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono Thin Italic Nerd Font Complete Mono Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono Nerd Font Mono Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono Thin Italic Nerd Font Complete Mono.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono NF Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono Thin Italic Nerd Font Complete Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono Nerd Font Italic (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono Thin Italic Nerd Font Complete.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono NFM Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono Thin Nerd Font Complete Mono Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono Nerd Font Mono Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono Thin Nerd Font Complete Mono.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono NF Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono Thin Nerd Font Complete Windows Compatible.ttf)
+[20:23:00] [Render thread/WARN] (Meteor Client) Failed to load system font JetBrainsMono Nerd Font Regular (C:\Users\Admin\AppData\Local\Microsoft\Windows\Fonts\JetBrains Mono Thin Nerd Font Complete.ttf)
+[20:23:00] [Render thread/INFO] (Meteor Client) Found 94 font families.
+[20:23:00] [Render thread/INFO] (Meteor Client) Path Manager: none

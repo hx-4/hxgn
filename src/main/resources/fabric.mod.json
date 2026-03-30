@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "hxgn",
+  "version": "${version}",
+  "name": "§ehxgn",
+  "description": "AutoMend and AutoElytraReplace for Meteor Client",
+  "authors": [
+    "§bhxgn"
+  ],
+  "environment": "client",
+  "entrypoints": {
+    "meteor": [
+      "hxgn.meteor.HxgnAddon"
+    ]
+  },
+  "depends": {
+    "java": ">=21",
+    "minecraft": "${mc_version}",
+    "meteor-client": "*"
+  }
+}
