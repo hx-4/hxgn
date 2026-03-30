@@ -46,6 +46,10 @@ public class ClickDispatcher {
         return queue.isEmpty();
     }
 
+    public int size() {
+        return queue.size();
+    }
+
     public void clear() {
         queue.clear();
     }

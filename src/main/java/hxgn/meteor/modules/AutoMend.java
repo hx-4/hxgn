@@ -4,6 +4,7 @@ import hxgn.meteor.ClickDispatcher;
 import hxgn.meteor.HxgnAddon;
 import hxgn.meteor.MendingScanner;
 import hxgn.meteor.RepairHandler;
+import hxgn.meteor.ShulkerRefillHandler;
 import java.util.function.Consumer;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.settings.*;
@@ -78,8 +79,39 @@ public class AutoMend extends Module {
             .sliderRange(0,500)
             .build());
 
+    private final SettingGroup sgShulker = settings.createGroup("Shulker Refill");
+
+    private final Setting<Boolean> shulkerRefill = sgShulker.add(new BoolSetting.Builder()
+            .name("shulker-refill")
+            .description("Place a shulker of damaged elytras to restock inventory when supply runs low")
+            .defaultValue(false)
+            .build());
+
+    private final Setting<Integer> refillThreshold = sgShulker.add(new IntSetting.Builder()
+            .name("refill-threshold")
+            .description("Trigger restock when damaged elytras in inventory drop below this count")
+            .defaultValue(2)
+            .min(1)
+            .max(27)
+            .build());
+
+    private final Setting<ShulkerRefillHandler.PlacementDir> placementDir = sgShulker.add(
+            new EnumSetting.Builder<ShulkerRefillHandler.PlacementDir>()
+                    .name("placement-dir")
+                    .description("Where to place the shulker box relative to the player")
+                    .defaultValue(ShulkerRefillHandler.PlacementDir.FRONT)
+                    .build());
+
+    private final Setting<ShulkerRefillHandler.BreakTool> breakTool = sgShulker.add(
+            new EnumSetting.Builder<ShulkerRefillHandler.BreakTool>()
+                    .name("break-tool")
+                    .description("Tool to use when breaking the shulker to pick it back up")
+                    .defaultValue(ShulkerRefillHandler.BreakTool.BEST_PICKAXE)
+                    .build());
+
     private final ClickDispatcher dispatcher = new ClickDispatcher(clickDelay);
     private final RepairHandler repairHandler = new RepairHandler(dispatcher);
+    private final ShulkerRefillHandler refillHandler = new ShulkerRefillHandler(dispatcher);
 
     private int lastInventoryHash = 0;
     private long manualCooldownUntil = 0L;
@@ -99,6 +131,7 @@ public class AutoMend extends Module {
         manualCooldownUntil = 0L;
         swapGraceUntil = 0L;
         dispatcher.clear();
+        refillHandler.reset();
 
         AutoArmor autoArmor = Modules.get().get(AutoArmor.class);
         if (autoArmor != null && autoArmor.isActive()) { autoArmor.toggle(); autoArmorWasOn = true; }
@@ -117,6 +150,7 @@ public class AutoMend extends Module {
     @Override
     public void onDeactivate() {
         dispatcher.clear();
+        refillHandler.reset();
         restoreModule(Modules.get().get(AutoTotem.class), autoTotemWasOn);
         autoTotemWasOn = false;
         restoreModule(Modules.get().get(FutureTotem.class), futureTotemWasOn);
@@ -130,11 +164,10 @@ public class AutoMend extends Module {
         // Extend grace window while our clicks are still draining (server confirmations still incoming)
         if (!dispatcher.isEmpty()) swapGraceUntil = System.currentTimeMillis() + SWAP_GRACE_MS;
 
-        boolean externalOpen = isExternalContainerOpen();
-        if (!externalOpen) dispatcher.drain();
+        if (!isExternalContainerOpen()) dispatcher.drain();
 
         if (mc.world == null) return;
-        if (externalOpen) return;
+        if (isExternalContainerOpen()) return;
         if (mc.currentScreen instanceof InventoryScreen && !inInventory.get()) return;
         if (!dispatcher.isEmpty()) return;
 
@@ -143,14 +176,13 @@ public class AutoMend extends Module {
 
         int hash = inventoryHash(player);
         if (hash != lastInventoryHash) {
-            lastInventoryHash = hash;
             if (System.currentTimeMillis() < swapGraceUntil) {
                 if (debug.get()) info("Hash changed by own swap");
             } else {
                 manualCooldownUntil = System.currentTimeMillis() + MANUAL_COOLDOWN_MS;
                 if (debug.get()) info("Manual inventory change, cooldown %dms", MANUAL_COOLDOWN_MS);
             }
-            return; // Always wait one tick for inventory to settle before deciding next swap
+            lastInventoryHash = hash;
         }
 
         if (System.currentTimeMillis() < manualCooldownUntil) {
@@ -201,7 +233,8 @@ public class AutoMend extends Module {
         for (Slot s : player.playerScreenHandler.slots) {
             if (!s.getStack().isEmpty()) {
                 hash = hash * 31 + s.getStack().getItem().hashCode();
-                hash = hash * 31 + s.getStack().getCount();
+                // Count intentionally excluded: consuming items (XP bottles, food) changes
+                // count but not position, so it shouldn't trigger the manual-change cooldown
             }
         }
         return hash;
