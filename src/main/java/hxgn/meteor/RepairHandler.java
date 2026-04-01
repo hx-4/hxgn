@@ -34,12 +34,12 @@ public class RepairHandler {
     }
 
     public void handleArmor(ClientPlayerEntity player, List<Slot> mendingPieces, boolean announce, Consumer<String> dbg) {
+        List<Slot> movable = mendingPieces.stream().filter(s -> isMovableSlot(s.id)).toList();
         for (int i = 0; i < ARMOR_SLOTS.length; i++) {
             final int armorSlotId = ARMOR_SLOT_IDS[i];
             final EquipmentSlot slot = ARMOR_SLOTS[i];
 
-            mendingPieces.stream()
-                    .filter(s -> isMovableSlot(s.id)) // only inventory/hotbar — never move from armor or offhand
+            movable.stream()
                     .filter(s -> player.getPreferredEquipmentSlot(s.getStack()) == slot)
                     .findFirst()
                     .ifPresent(candidate -> {

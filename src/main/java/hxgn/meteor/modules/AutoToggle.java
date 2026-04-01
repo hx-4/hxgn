@@ -8,8 +8,9 @@ import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.orbit.EventHandler;
+import net.minecraft.entity.effect.StatusEffects;
+import net.minecraft.util.math.BlockPos;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,8 +35,7 @@ public class AutoToggle extends Module {
         .name("delay")
         .description("Seconds before a disabled module is re-enabled")
         .defaultValue(30)
-        .min(1)
-        .max(3600)
+        .sliderRange(1,60)
         .visible(timerEnabled::get)
         .build());
 
@@ -132,15 +132,29 @@ public class AutoToggle extends Module {
         .name("health-threshold")
         .description("Enable FutureTotem when health drops at or below this value (half-hearts, 20 = full health)")
         .defaultValue(10)
-        .min(1)
-        .max(40)
+        .sliderRange(1,20)
         .visible(smartTotem::get)
+        .build());
+
+    private final Setting<Boolean> fallPrediction = sgSmartTotem.add(new BoolSetting.Builder()
+        .name("fall-prediction")
+        .description("Enable FutureTotem when predicted fall damage would be dangerous")
+        .defaultValue(false)
+        .build());
+
+    private final Setting<Integer> fallHealthPercent = sgSmartTotem.add(new IntSetting.Builder()
+        .name("fall-health-%")
+        .description("Trigger when estimated fall damage exceeds this % of current HP + absorption (100 = only if lethal)")
+        .defaultValue(90)
+        .sliderRange(1,100)
+        .visible(fallPrediction::get)
         .build());
 
     // ── State ─────────────────────────────────────────────────────────────────
 
     private final Map<Module, Long>    disabledAt     = new HashMap<>();
     private final Map<Module, Boolean> lastKnownState = new HashMap<>();
+    private final BlockPos.Mutable scanPos = new BlockPos.Mutable();
 
     private boolean hadPlayer  = false;
     private boolean wasElytra  = false;
@@ -239,16 +253,51 @@ public class AutoToggle extends Module {
         }
         prevHealth = health;
 
-        // Smart Totem
-        if (smartTotem.get()) {
+        // Smart Totem: health threshold and fall prediction
+        if (smartTotem.get() || fallPrediction.get()) {
             FutureTotem ft = Modules.get().get(FutureTotem.class);
-            if (ft != null && !ft.isActive() && mc.player.getHealth() <= smartTotemThreshold.get()) {
-                enable(ft);
+            if (ft != null && !ft.isActive()) {
+                if (smartTotem.get() && mc.player.getHealth() <= smartTotemThreshold.get()) enable(ft);
+                else if (fallPrediction.get() && isLethalFallPredicted()) enable(ft);
             }
         }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+
+    private boolean isLethalFallPredicted() {
+        if (mc.player == null || mc.world == null) return false;
+        if (mc.player.isOnGround()) return false;
+        if (mc.player.isTouchingWater() || mc.player.isInLava()) return false;
+        if (mc.player.getAbilities().flying) return false;
+        if (mc.player.isGliding()) return false;
+        if (mc.player.getVelocity().y >= 0) return false; // going up or stationary
+        if (mc.player.hasStatusEffect(StatusEffects.SLOW_FALLING)) return false;
+        if (mc.player.hasStatusEffect(StatusEffects.LEVITATION)) return false;
+
+        int airBelow = airBlocksBelow();
+        if (airBelow == 0) return false;
+
+        float totalFallDist = mc.player.fallDistance + airBelow;
+        float rawDamage = Math.max(0, totalFallDist - 3); // 3-block safe fall
+        if (rawDamage <= 0) return false;
+
+        float effectiveHP = mc.player.getHealth() + mc.player.getAbsorptionAmount();
+        return rawDamage >= effectiveHP * (fallHealthPercent.get() / 100.0f);
+    }
+
+    /** Count consecutive air blocks directly below the player's feet. Stops at the first non-air block. */
+    private int airBlocksBelow() {
+        int x = mc.player.getBlockX();
+        int z = mc.player.getBlockZ();
+        int startY = mc.player.getBlockPos().getY(); // block at player feet
+        int minY = mc.world.getBottomY();
+        for (int y = startY; y >= minY; y--) {
+            scanPos.set(x, y, z);
+            if (!mc.world.getBlockState(scanPos).isAir()) return startY - y;
+        }
+        return startY - minY; // all air to world bottom (void)
+    }
 
     private void enableList(List<Module> list) {
         for (Module mod : list) enable(mod);

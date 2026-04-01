@@ -75,8 +75,7 @@ public class AutoMend extends Module {
             .name("click-delay")
             .description("Milliseconds between inventory clicks")
             .defaultValue(50)
-            .min(0)
-            .max(500)
+            .sliderRange(0,500)
             .build());
 
     private final ClickDispatcher dispatcher = new ClickDispatcher(clickDelay);
@@ -88,6 +87,7 @@ public class AutoMend extends Module {
 
     private static final long MANUAL_COOLDOWN_MS = 2000L;
     private static final long SWAP_GRACE_MS = 500L;
+    private static final Consumer<String> NOOP = s -> {};
 
     public AutoMend() {
         super(HxgnAddon.CATEGORY, "auto-mender", "Wear the most-damaged mending piece so XP repairs it");
@@ -127,10 +127,11 @@ public class AutoMend extends Module {
         // Extend grace window while our clicks are still draining (server confirmations still incoming)
         if (!dispatcher.isEmpty()) swapGraceUntil = System.currentTimeMillis() + SWAP_GRACE_MS;
 
-        if (!isExternalContainerOpen()) dispatcher.drain();
+        boolean externalOpen = isExternalContainerOpen();
+        if (!externalOpen) dispatcher.drain();
 
         if (mc.world == null) return;
-        if (isExternalContainerOpen()) return;
+        if (externalOpen) return;
         if (mc.currentScreen instanceof InventoryScreen && !inInventory.get()) return;
         if (!dispatcher.isEmpty()) return;
 
@@ -163,10 +164,10 @@ public class AutoMend extends Module {
     private void runSwapper(ClientPlayerEntity player) {
         if (mc.world == null) return;
         RegistryEntry<Enchantment> mending = MendingScanner.resolveMending(mc.world);
-        List<Slot> pieces = MendingScanner.scan(player, mc.world);
-        List<Slot> tools = MendingScanner.scanTools(player, mc.world);
+        List<Slot> pieces = MendingScanner.scan(player, mending);
+        List<Slot> tools = MendingScanner.scanTools(player, mending);
 
-        Consumer<String> dbg = debug.get() ? this::info : s -> {};
+        Consumer<String> dbg = debug.get() ? this::info : NOOP;
 
         if (debug.get()) {
             String pieceNames = pieces.isEmpty() ? "none" : pieces.stream()

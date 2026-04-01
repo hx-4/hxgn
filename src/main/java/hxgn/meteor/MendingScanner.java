@@ -21,9 +21,7 @@ public final class MendingScanner {
         return world.getRegistryManager().getOrThrow(RegistryKeys.ENCHANTMENT).getEntry(Enchantments.MENDING.getValue()).orElseThrow();
     }
 
-    public static List<Slot> scan(ClientPlayerEntity player, ClientWorld world) {
-        final var mending = resolveMending(world);
-
+    public static List<Slot> scan(ClientPlayerEntity player, RegistryEntry<Enchantment> mending) {
         return player.playerScreenHandler.slots.stream()
                 .filter(s -> !s.getStack().isEmpty())
                 .filter(s -> {
@@ -36,8 +34,7 @@ public final class MendingScanner {
                 .toList();
     }
 
-    public static List<Slot> scanTools(ClientPlayerEntity player, ClientWorld world) {
-        final var mending = resolveMending(world);
+    public static List<Slot> scanTools(ClientPlayerEntity player, RegistryEntry<Enchantment> mending) {
         // hotbar slots in the playerScreenHandler are at container IDs 36-44 (index + 36)
         final int selectedContainerSlotId = 36 + player.getInventory().selectedSlot;
 
