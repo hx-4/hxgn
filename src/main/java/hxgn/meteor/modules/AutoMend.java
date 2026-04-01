@@ -107,7 +107,10 @@ public class AutoMend extends Module {
             AutoTotem autoTotem = Modules.get().get(AutoTotem.class);
             if (autoTotem != null && autoTotem.isActive()) { autoTotem.toggle(); autoTotemWasOn = true; }
             FutureTotem futureTotem = Modules.get().get(FutureTotem.class);
-            if (futureTotem != null && futureTotem.isActive()) { futureTotem.toggle(); futureTotemWasOn = true; }
+            if (futureTotem != null && futureTotem.isActive()) {
+                futureTotem.toggle();
+                futureTotemWasOn = true;
+            }
         }
     }
 
