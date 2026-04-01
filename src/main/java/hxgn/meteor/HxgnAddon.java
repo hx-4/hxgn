@@ -2,6 +2,7 @@ package hxgn.meteor;
 
 import hxgn.meteor.modules.AutoElytraReplace;
 import hxgn.meteor.modules.AutoMend;
+import hxgn.meteor.modules.AutoToggle;
 import hxgn.meteor.modules.FutureTotem;
 import meteordevelopment.meteorclient.addons.MeteorAddon;
 import meteordevelopment.meteorclient.systems.modules.Category;
@@ -17,6 +18,7 @@ public class HxgnAddon extends MeteorAddon {
 
     @Override
     public void onInitialize() {
+        Modules.get().add(new AutoToggle());
         Modules.get().add(new AutoMend());
         Modules.get().add(new AutoElytraReplace());
         Modules.get().add(new FutureTotem());

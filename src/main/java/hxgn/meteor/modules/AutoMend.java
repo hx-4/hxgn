@@ -4,6 +4,7 @@ import hxgn.meteor.ClickDispatcher;
 import hxgn.meteor.HxgnAddon;
 import hxgn.meteor.MendingScanner;
 import hxgn.meteor.RepairHandler;
+import java.util.function.Consumer;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.meteorclient.systems.modules.Module;
@@ -73,7 +74,7 @@ public class AutoMend extends Module {
     private final Setting<Integer> clickDelay = sgGeneral.add(new IntSetting.Builder()
             .name("click-delay")
             .description("Milliseconds between inventory clicks")
-            .defaultValue(10)
+            .defaultValue(50)
             .min(0)
             .max(500)
             .build());
@@ -138,13 +139,14 @@ public class AutoMend extends Module {
 
         int hash = inventoryHash(player);
         if (hash != lastInventoryHash) {
+            lastInventoryHash = hash;
             if (System.currentTimeMillis() < swapGraceUntil) {
                 if (debug.get()) info("Hash changed by own swap");
             } else {
                 manualCooldownUntil = System.currentTimeMillis() + MANUAL_COOLDOWN_MS;
                 if (debug.get()) info("Manual inventory change, cooldown %dms", MANUAL_COOLDOWN_MS);
             }
-            lastInventoryHash = hash;
+            return; // Always wait one tick for inventory to settle before deciding next swap
         }
 
         if (System.currentTimeMillis() < manualCooldownUntil) {
@@ -163,15 +165,23 @@ public class AutoMend extends Module {
         RegistryEntry<Enchantment> mending = MendingScanner.resolveMending(mc.world);
         List<Slot> pieces = MendingScanner.scan(player, mc.world);
         List<Slot> tools = MendingScanner.scanTools(player, mc.world);
+
+        Consumer<String> dbg = debug.get() ? this::info : s -> {};
+
         if (debug.get()) {
             String pieceNames = pieces.isEmpty() ? "none" : pieces.stream()
-                    .map(s -> s.getStack().getName().getString() + "(dmg=" + s.getStack().getDamage() + ")")
+                    .map(s -> s.getStack().getName().getString() + "(dmg=" + s.getStack().getDamage() + ",s=" + s.id + ")")
                     .reduce((a, b) -> a + ", " + b).orElse("");
             info("Pieces[%d]: %s | Tools[%d]", pieces.size(), pieceNames, tools.size());
         }
-        repairHandler.handleArmor(player, pieces, announce.get());
-        repairHandler.handleOffhand(player, pieces, tools, offhandToo.get(), mending, prioritizeTools.get(), announce.get());
-        if (debug.get() && !dispatcher.isEmpty()) info("Swap queued");
+
+        repairHandler.handleArmor(player, pieces, announce.get(), dbg);
+        if (!dispatcher.isEmpty()) {
+            if (debug.get()) info("Armor swap queued");
+            return; // Don't also queue an offhand swap this tick — wait for armor to settle
+        }
+        repairHandler.handleOffhand(player, pieces, tools, offhandToo.get(), mending, prioritizeTools.get(), announce.get(), dbg);
+        if (debug.get() && !dispatcher.isEmpty()) info("Offhand swap queued");
     }
 
     private boolean isExternalContainerOpen() {

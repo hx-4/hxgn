@@ -10,6 +10,7 @@ import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.text.Text;
 
 import java.util.List;
+import java.util.function.Consumer;
 
 public class RepairHandler {
 
@@ -26,24 +27,35 @@ public class RepairHandler {
         this.dispatcher = dispatcher;
     }
 
-    public void handleArmor(ClientPlayerEntity player, List<Slot> mendingPieces, boolean announce) {
+    /** Only slots 9–44 (inventory + hotbar) are valid swap sources.
+     *  Armor slots (5–8) and offhand (45) are never moved from here — they are destinations only. */
+    private static boolean isMovableSlot(int id) {
+        return id >= 9 && id <= 44;
+    }
+
+    public void handleArmor(ClientPlayerEntity player, List<Slot> mendingPieces, boolean announce, Consumer<String> dbg) {
         for (int i = 0; i < ARMOR_SLOTS.length; i++) {
             final int armorSlotId = ARMOR_SLOT_IDS[i];
             final EquipmentSlot slot = ARMOR_SLOTS[i];
 
             mendingPieces.stream()
+                    .filter(s -> isMovableSlot(s.id)) // only inventory/hotbar — never move from armor or offhand
                     .filter(s -> player.getPreferredEquipmentSlot(s.getStack()) == slot)
                     .findFirst()
                     .ifPresent(candidate -> {
                         ItemStack worn = player.playerScreenHandler.getSlot(armorSlotId).getStack();
                         ItemStack toWear = candidate.getStack();
-
+                        dbg.accept(String.format("armor %s: worn=%s(dmg=%d) cand=%s(dmg=%d,s=%d)",
+                                slot.getName(), worn.getName().getString(), worn.getDamage(),
+                                toWear.getName().getString(), toWear.getDamage(), candidate.id));
+                        // Only equip the inventory piece when the currently worn one is fully repaired
                         if (toWear.getDamage() > 0 && worn.getDamage() == 0) {
                             if (announce && !worn.isEmpty() && worn.isDamageable()) {
                                 player.sendMessage(
                                         Text.literal("[AutoMender] " + worn.getName().getString() + " fully repaired!"), true);
                             }
-                            swapWithArmorSlot(candidate, armorSlotId);
+                            dbg.accept("  → equipping " + toWear.getName().getString() + " from slot " + candidate.id);
+                            dispatcher.enqueueSwap(candidate.id, armorSlotId);
                         }
                     });
         }
@@ -51,52 +63,65 @@ public class RepairHandler {
 
     public void handleOffhand(ClientPlayerEntity player, List<Slot> mendingPieces, List<Slot> mendingTools,
                               boolean offhandEnabled, RegistryEntry<Enchantment> mendingHolder,
-                              boolean prioritizeTools, boolean announce) {
+                              boolean prioritizeTools, boolean announce, Consumer<String> dbg) {
         if (!offhandEnabled) return;
 
+        // Only inventory/hotbar items are valid offhand candidates.
+        // Items in armor slots (5–8) are already being repaired there; don't pull them out.
+        List<Slot> invPieces = mendingPieces.stream().filter(s -> isMovableSlot(s.id)).toList();
+        List<Slot> invTools  = mendingTools.stream().filter(s -> isMovableSlot(s.id)).toList();
+
         final Slot candidate;
-        boolean toolFirst = prioritizeTools && !mendingTools.isEmpty() && mendingTools.get(0).getStack().getDamage() > 0;
+        boolean toolFirst = prioritizeTools && !invTools.isEmpty() && invTools.get(0).getStack().getDamage() > 0;
         if (toolFirst) {
-            candidate = mendingTools.get(0);
-        } else if (mendingPieces.size() >= 2 && mendingPieces.get(1).getStack().getDamage() > 0) {
-            candidate = mendingPieces.get(1);
-        } else if (!mendingTools.isEmpty() && mendingTools.get(0).getStack().getDamage() > 0) {
-            candidate = mendingTools.get(0);
+            candidate = invTools.get(0);
+        } else if (!invPieces.isEmpty() && invPieces.get(0).getStack().getDamage() > 0) {
+            candidate = invPieces.get(0);
+        } else if (!invTools.isEmpty() && invTools.get(0).getStack().getDamage() > 0) {
+            candidate = invTools.get(0);
         } else {
+            dbg.accept("offhand: no damaged inventory candidate");
             return;
         }
 
-        ItemStack currentOffhand = player.playerScreenHandler.getSlot(OFFHAND_SLOT_ID).getStack();
+        dbg.accept(String.format("offhand: candidate=%s(dmg=%d,s=%d)",
+                candidate.getStack().getName().getString(), candidate.getStack().getDamage(), candidate.id));
 
+        ItemStack currentOffhand = player.playerScreenHandler.getSlot(OFFHAND_SLOT_ID).getStack();
         boolean offhandHasMendingItem = !currentOffhand.isEmpty()
                 && currentOffhand.isDamageable()
                 && EnchantmentHelper.getLevel(mendingHolder, currentOffhand) > 0;
 
         if (offhandHasMendingItem) {
+            dbg.accept(String.format("offhand: current=%s(dmg=%d)", currentOffhand.getName().getString(), currentOffhand.getDamage()));
             if (currentOffhand.getDamage() == 0) {
                 if (announce) {
                     player.sendMessage(
                             Text.literal("[AutoMender] " + currentOffhand.getName().getString() + " fully repaired!"), true);
                 }
                 if (hasFreeInventorySlot(player)) {
+                    dbg.accept("offhand: done repairing, moving to inventory");
                     dispatcher.enqueueClick(OFFHAND_SLOT_ID, true);
                 }
-            } else if (candidate.id == OFFHAND_SLOT_ID) {
-                return;
-            } else if (toolFirst) {
+            } else if (toolFirst && currentOffhand.getDamage() <= candidate.getStack().getDamage()) {
+                // A more-damaged tool has appeared; upgrade the offhand
                 if (hasFreeInventorySlot(player)) {
+                    dbg.accept("offhand: upgrading to more-damaged tool");
                     dispatcher.enqueueClick(OFFHAND_SLOT_ID, true);
                 }
             } else {
-                return;
+                dbg.accept("offhand: still repairing, no action");
             }
+            return;
         }
 
-        dispatcher.enqueueSwap(candidate.id, OFFHAND_SLOT_ID);
-    }
+        if (ItemStack.areItemsAndComponentsEqual(currentOffhand, candidate.getStack())) {
+            dbg.accept("offhand: candidate already in offhand");
+            return;
+        }
 
-    private void swapWithArmorSlot(Slot source, int armorSlotId) {
-        dispatcher.enqueueSwap(source.id, armorSlotId);
+        dbg.accept("offhand: swapping in " + candidate.getStack().getName().getString());
+        dispatcher.enqueueSwap(candidate.id, OFFHAND_SLOT_ID);
     }
 
     private boolean hasFreeInventorySlot(ClientPlayerEntity player) {
