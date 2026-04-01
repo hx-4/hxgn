@@ -45,16 +45,15 @@ public class RepairHandler {
                     .ifPresent(candidate -> {
                         ItemStack worn = player.playerScreenHandler.getSlot(armorSlotId).getStack();
                         ItemStack toWear = candidate.getStack();
-                        dbg.accept(String.format("armor %s: worn=%s(dmg=%d) cand=%s(dmg=%d,s=%d)",
-                                slot.getName(), worn.getName().getString(), worn.getDamage(),
-                                toWear.getName().getString(), toWear.getDamage(), candidate.id));
                         // Only equip the inventory piece when the currently worn one is fully repaired
                         if (toWear.getDamage() > 0 && worn.getDamage() == 0) {
+                            dbg.accept(String.format("armor %s: worn=%s(dmg=%d) → swapping in %s(dmg=%d,s=%d)",
+                                    slot.getName(), worn.getName().getString(), worn.getDamage(),
+                                    toWear.getName().getString(), toWear.getDamage(), candidate.id));
                             if (announce && !worn.isEmpty() && worn.isDamageable()) {
                                 player.sendMessage(
                                         Text.literal("[AutoMender] " + worn.getName().getString() + " fully repaired!"), true);
                             }
-                            dbg.accept("  → equipping " + toWear.getName().getString() + " from slot " + candidate.id);
                             dispatcher.enqueueSwap(candidate.id, armorSlotId);
                         }
                     });
@@ -80,7 +79,6 @@ public class RepairHandler {
         } else if (!invTools.isEmpty() && invTools.get(0).getStack().getDamage() > 0) {
             candidate = invTools.get(0);
         } else {
-            dbg.accept("offhand: no damaged inventory candidate");
             return;
         }
 
@@ -109,8 +107,6 @@ public class RepairHandler {
                     dbg.accept("offhand: upgrading to more-damaged tool");
                     dispatcher.enqueueClick(OFFHAND_SLOT_ID, true);
                 }
-            } else {
-                dbg.accept("offhand: still repairing, no action");
             }
             return;
         }
