@@ -30,4 +30,8 @@ bin/
 
 # fabric
 
-run/
+
+/run/
+
+# claude code
+.claude/

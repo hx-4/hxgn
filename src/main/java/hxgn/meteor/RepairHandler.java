@@ -82,37 +82,29 @@ public class RepairHandler {
             return;
         }
 
-        dbg.accept(String.format("offhand: candidate=%s(dmg=%d,s=%d)",
-                candidate.getStack().getName().getString(), candidate.getStack().getDamage(), candidate.id));
-
         ItemStack currentOffhand = player.playerScreenHandler.getSlot(OFFHAND_SLOT_ID).getStack();
         boolean offhandHasMendingItem = !currentOffhand.isEmpty()
                 && currentOffhand.isDamageable()
                 && EnchantmentHelper.getLevel(mendingHolder, currentOffhand) > 0;
 
         if (offhandHasMendingItem) {
-            dbg.accept(String.format("offhand: current=%s(dmg=%d)", currentOffhand.getName().getString(), currentOffhand.getDamage()));
             if (currentOffhand.getDamage() == 0) {
                 if (announce) {
                     player.sendMessage(
                             Text.literal("[AutoMender] " + currentOffhand.getName().getString() + " fully repaired!"), true);
                 }
-                if (hasFreeInventorySlot(player)) {
-                    dbg.accept("offhand: done repairing, moving to inventory");
-                    dispatcher.enqueueClick(OFFHAND_SLOT_ID, true);
-                }
+                // Direct swap works even when inventory is full (no free slot needed)
+                dbg.accept("offhand: done repairing, swapping with candidate");
+                dispatcher.enqueueSwap(candidate.id, OFFHAND_SLOT_ID);
             } else if (toolFirst && currentOffhand.getDamage() <= candidate.getStack().getDamage()) {
                 // A more-damaged tool has appeared; upgrade the offhand
-                if (hasFreeInventorySlot(player)) {
-                    dbg.accept("offhand: upgrading to more-damaged tool");
-                    dispatcher.enqueueClick(OFFHAND_SLOT_ID, true);
-                }
+                dbg.accept("offhand: upgrading to more-damaged tool");
+                dispatcher.enqueueSwap(candidate.id, OFFHAND_SLOT_ID);
             }
             return;
         }
 
         if (ItemStack.areItemsAndComponentsEqual(currentOffhand, candidate.getStack())) {
-            dbg.accept("offhand: candidate already in offhand");
             return;
         }
 
@@ -120,7 +112,4 @@ public class RepairHandler {
         dispatcher.enqueueSwap(candidate.id, OFFHAND_SLOT_ID);
     }
 
-    private boolean hasFreeInventorySlot(ClientPlayerEntity player) {
-        return player.getInventory().getEmptySlot() != -1;
-    }
 }
