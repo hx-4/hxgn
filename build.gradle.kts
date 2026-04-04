@@ -24,6 +24,7 @@ dependencies {
     mappings(variantOf(libs.yarn) { classifier("v2") })
     modImplementation(libs.fabric.loader)
     modImplementation(libs.meteor.client)
+    modCompileOnly(files("run/mods/baritone-api-fabric-1.13.1.jar"))
 }
 
 tasks {

@@ -7,9 +7,11 @@ import hxgn.meteor.RepairHandler;
 import hxgn.meteor.ShulkerRefillHandler;
 import java.util.function.Consumer;
 import meteordevelopment.meteorclient.events.world.TickEvent;
+import net.minecraft.util.math.Vec3d;
 import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.systems.modules.Modules;
+import java.util.Optional;
 import meteordevelopment.meteorclient.systems.modules.combat.AutoArmor;
 import meteordevelopment.meteorclient.systems.modules.combat.AutoTotem;
 import meteordevelopment.orbit.EventHandler;
@@ -81,12 +83,6 @@ public class AutoMend extends Module {
 
     private final SettingGroup sgShulker = settings.createGroup("Shulker Refill");
 
-    private final Setting<Boolean> shulkerRefill = sgShulker.add(new BoolSetting.Builder()
-            .name("shulker-refill")
-            .description("Place a shulker of damaged elytras to restock inventory when supply runs low")
-            .defaultValue(false)
-            .build());
-
     private final Setting<Integer> refillThreshold = sgShulker.add(new IntSetting.Builder()
             .name("refill-threshold")
             .description("Trigger restock when damaged elytras in inventory drop below this count")
@@ -94,13 +90,6 @@ public class AutoMend extends Module {
             .min(1)
             .max(27)
             .build());
-
-    private final Setting<ShulkerRefillHandler.PlacementDir> placementDir = sgShulker.add(
-            new EnumSetting.Builder<ShulkerRefillHandler.PlacementDir>()
-                    .name("placement-dir")
-                    .description("Where to place the shulker box relative to the player")
-                    .defaultValue(ShulkerRefillHandler.PlacementDir.FRONT)
-                    .build());
 
     private final Setting<ShulkerRefillHandler.BreakTool> breakTool = sgShulker.add(
             new EnumSetting.Builder<ShulkerRefillHandler.BreakTool>()
@@ -110,12 +99,46 @@ public class AutoMend extends Module {
                     .build());
 
     private final ClickDispatcher dispatcher = new ClickDispatcher(clickDelay);
+
     private final RepairHandler repairHandler = new RepairHandler(dispatcher);
-    private final ShulkerRefillHandler refillHandler = new ShulkerRefillHandler(dispatcher);
+
+    // ShulkerRefillHandler owns its own transferDispatcher (separate from the armor-swap dispatcher).
+    // transferDispatcher drains only when a container IS open; main dispatcher drains only when none is open.
+    private final ShulkerRefillHandler refillHandler = new ShulkerRefillHandler(clickDelay);
+
+    //dependency on refillHandler
+    private final Setting<Boolean> shulkerRefill = sgShulker.add(new BoolSetting.Builder()
+            .name("shulker-refill")
+            .description("Place a shulker of damaged elytras to restock inventory when supply runs low")
+            .defaultValue(false)
+            .onChanged(enabled -> {
+                if (!isActive()) return;
+                if (!enabled) {
+                    refillHandler.reset();
+                    resumeRusherAura();
+                    prevRefillActive = false;
+                }
+            })
+            .build());
 
     private int lastInventoryHash = 0;
     private long manualCooldownUntil = 0L;
     private long swapGraceUntil = 0L;
+
+    // Camera/movement lock during refill
+    private float lockedYaw, lockedPitch;
+    private boolean cameraLocked = false;
+
+    // Rusher Aura soft-dependency (reflection — no compile-time dep required)
+    private static final boolean RUSHER_PRESENT;
+    static {
+        boolean present;
+        try { Class.forName("org.rusherhack.client.api.RusherHackAPI"); present = true; }
+        catch (ClassNotFoundException e) { present = false; }
+        RUSHER_PRESENT = present;
+    }
+    private boolean rusherAuraWasEnabled = false;
+    private boolean prevRefillActive = false;
 
     private static final long MANUAL_COOLDOWN_MS = 2000L;
     private static final long SWAP_GRACE_MS = 500L;
@@ -151,6 +174,9 @@ public class AutoMend extends Module {
     public void onDeactivate() {
         dispatcher.clear();
         refillHandler.reset();
+        cameraLocked = false;
+        resumeRusherAura();
+        prevRefillActive = false;
         restoreModule(Modules.get().get(AutoTotem.class), autoTotemWasOn);
         autoTotemWasOn = false;
         restoreModule(Modules.get().get(FutureTotem.class), futureTotemWasOn);
@@ -161,18 +187,60 @@ public class AutoMend extends Module {
 
     @EventHandler
     private void onTick(TickEvent.Pre event) {
-        // Extend grace window while our clicks are still draining (server confirmations still incoming)
+        // Extend grace window while armor-swap clicks are still draining.
         if (!dispatcher.isEmpty()) swapGraceUntil = System.currentTimeMillis() + SWAP_GRACE_MS;
 
+        // Main dispatcher: drains only when no container is open (armor/offhand swaps).
         if (!isExternalContainerOpen()) dispatcher.drain();
 
         if (mc.world == null) return;
-        if (isExternalContainerOpen()) return;
-        if (mc.currentScreen instanceof InventoryScreen && !inInventory.get()) return;
-        if (!dispatcher.isEmpty()) return;
 
         ClientPlayerEntity player = mc.player;
         if (player == null) return;
+
+        // ── Shulker Refill ──────────────────────────────────────────────────────────
+        if (shulkerRefill.get()) {
+            // transferDispatcher drains only when a container IS open (inverted from main).
+            if (isExternalContainerOpen()) refillHandler.drainTransfer();
+
+            refillHandler.setLogger(debug.get() ? this::info : NOOP);
+            boolean refillActive = refillHandler.tick(
+                player, dispatcher, refillThreshold.get(), breakTool.get());
+
+            if (refillActive && !prevRefillActive) pauseRusherAura();
+            else if (!refillActive && prevRefillActive) resumeRusherAura();
+            prevRefillActive = refillActive;
+
+            if (refillHandler.shouldDisable()) {
+                refillHandler.clearShouldDisable();
+                info("[AutoMender] No more damaged elytras in any shulker, disabling.");
+                toggle();
+                return;
+            }
+
+            if (refillActive) {
+                if (refillHandler.wantsMovementLock()) {
+                    if (!cameraLocked) {
+                        lockedYaw   = player.getYaw();
+                        lockedPitch = player.getPitch();
+                        cameraLocked = true;
+                    }
+                    player.setYaw(lockedYaw);
+                    player.setPitch(lockedPitch);
+                    Vec3d vel = player.getVelocity();
+                    player.setVelocity(0, vel.y, 0);
+                } else {
+                    cameraLocked = false;
+                }
+                return; // Pause normal swapper while a refill cycle is in progress.
+            }
+            cameraLocked = false;
+        }
+        // ───────────────────────────────────────────────────────────────────────────
+
+        if (isExternalContainerOpen()) return;
+        if (mc.currentScreen instanceof InventoryScreen && !inInventory.get()) return;
+        if (!dispatcher.isEmpty()) return;
 
         int hash = inventoryHash(player);
         if (hash != lastInventoryHash) {
@@ -192,7 +260,7 @@ public class AutoMend extends Module {
 
         runSwapper(player);
 
-        // If runSwapper just queued something, open the grace window
+        // If runSwapper just queued something, open the grace window.
         if (!dispatcher.isEmpty()) swapGraceUntil = System.currentTimeMillis() + SWAP_GRACE_MS;
     }
 
@@ -218,6 +286,48 @@ public class AutoMend extends Module {
         }
         repairHandler.handleOffhand(player, pieces, tools, offhandToo.get(), mending, prioritizeTools.get(), announce.get(), dbg);
         if (debug.get() && !dispatcher.isEmpty()) info("Offhand swap queued");
+    }
+
+    @EventHandler
+    private void onTickPost(TickEvent.Post event) {
+        if (!isActive() || mc.player == null || !shulkerRefill.get()) return;
+        if (!refillHandler.isActive() || !refillHandler.wantsMovementLock()) return;
+        Vec3d vel = mc.player.getVelocity();
+        mc.player.setVelocity(0, vel.y, 0);
+    }
+
+    private void pauseRusherAura() {
+        if (!RUSHER_PRESENT) return;
+        try {
+            Class<?> api      = Class.forName("org.rusherhack.client.api.RusherHackAPI");
+            Class<?> togClass = Class.forName("org.rusherhack.client.api.feature.module.ToggleableModule");
+            Object mgr = api.getMethod("getModuleManager").invoke(null);
+            @SuppressWarnings("unchecked")
+            Optional<Object> opt = (Optional<Object>) mgr.getClass()
+                    .getMethod("getFeature", String.class).invoke(mgr, "Aura");
+            if (opt.isEmpty()) return;
+            Object mod = opt.get();
+            if (!togClass.isInstance(mod)) return;
+            if ((boolean) togClass.getMethod("isToggled").invoke(mod)) {
+                togClass.getMethod("setToggled", boolean.class).invoke(mod, false);
+                rusherAuraWasEnabled = true;
+            }
+        } catch (Exception ignored) {}
+    }
+
+    private void resumeRusherAura() {
+        if (!RUSHER_PRESENT || !rusherAuraWasEnabled) return;
+        try {
+            Class<?> api      = Class.forName("org.rusherhack.client.api.RusherHackAPI");
+            Class<?> togClass = Class.forName("org.rusherhack.client.api.feature.module.ToggleableModule");
+            Object mgr = api.getMethod("getModuleManager").invoke(null);
+            @SuppressWarnings("unchecked")
+            Optional<Object> opt = (Optional<Object>) mgr.getClass()
+                    .getMethod("getFeature", String.class).invoke(mgr, "Aura");
+            if (opt.isPresent() && togClass.isInstance(opt.get()))
+                togClass.getMethod("setToggled", boolean.class).invoke(opt.get(), true);
+        } catch (Exception ignored) {}
+        rusherAuraWasEnabled = false;
     }
 
     private boolean isExternalContainerOpen() {
