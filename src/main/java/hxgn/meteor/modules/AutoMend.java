@@ -104,6 +104,12 @@ public class AutoMend extends Module {
             .defaultValue(true)
             .build());
 
+    private final Setting<Boolean> autoDisable = sgShulker.add(new BoolSetting.Builder()
+            .name("auto-disable")
+            .description("Disable the module automatically when no more mending shulkers are found")
+            .defaultValue(true)
+            .build());
+
     private final ClickDispatcher dispatcher = new ClickDispatcher(clickDelay);
 
     private final RepairHandler repairHandler = new RepairHandler(dispatcher);
@@ -219,9 +225,13 @@ public class AutoMend extends Module {
 
             if (refillHandler.shouldDisable()) {
                 refillHandler.clearShouldDisable();
-                info("[AutoMender] No more damaged mending items in any shulker, disabling.");
-                toggle();
-                return;
+                if (autoDisable.get()) {
+                    info("[AutoMender] No more damaged mending items in any shulker, disabling.");
+                    toggle();
+                    return;
+                } else {
+                    info("[AutoMender] No more damaged mending items in any shulker.");
+                }
             }
 
             if (refillActive) {
@@ -307,6 +317,7 @@ public class AutoMend extends Module {
             Object mod = opt.get();
             if (!togClass.isInstance(mod)) return;
             if ((boolean) togClass.getMethod("isToggled").invoke(mod)) {
+                if (debug.get()) info("Rusher Aura is on, pausing for refill");
                 togClass.getMethod("setToggled", boolean.class).invoke(mod, false);
                 rusherAuraWasEnabled = true;
             }
@@ -322,8 +333,10 @@ public class AutoMend extends Module {
             @SuppressWarnings("unchecked")
             Optional<Object> opt = (Optional<Object>) mgr.getClass()
                     .getMethod("getFeature", String.class).invoke(mgr, "Aura");
-            if (opt.isPresent() && togClass.isInstance(opt.get()))
+            if (opt.isPresent() && togClass.isInstance(opt.get())) {
+                if (debug.get()) info("Resuming Rusher Aura");
                 togClass.getMethod("setToggled", boolean.class).invoke(opt.get(), true);
+            }
         } catch (Exception ignored) {}
         rusherAuraWasEnabled = false;
     }
