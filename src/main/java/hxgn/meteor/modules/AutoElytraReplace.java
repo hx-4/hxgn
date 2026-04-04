@@ -54,6 +54,16 @@ public class AutoElytraReplace extends Module {
     }
 
     @Override
+    public String getInfoString() {
+        if (mc.player == null) return null;
+        int count = 0;
+        for (Slot slot : mc.player.playerScreenHandler.slots) {
+            if (slot.getStack().getItem() == Items.ELYTRA) count++;
+        }
+        return String.valueOf(count);
+    }
+
+    @Override
     public void onDeactivate() {
         dispatcher.clear();
     }

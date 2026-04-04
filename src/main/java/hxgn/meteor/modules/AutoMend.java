@@ -44,8 +44,8 @@ public class AutoMend extends Module {
                     if (autoTotem != null && autoTotem.isActive()) { autoTotem.toggle(); autoTotemWasOn = true; }
                     if (futureTotem != null && futureTotem.isActive()) { futureTotem.toggle(); futureTotemWasOn = true; }
                 } else {
-                    if (autoTotemWasOn) { if (!autoTotem.isActive()) autoTotem.toggle(); autoTotemWasOn = false; }
-                    if (futureTotemWasOn) { if (!futureTotem.isActive()) futureTotem.toggle(); futureTotemWasOn = false; }
+                    if (autoTotemWasOn && autoTotem != null) { if (!autoTotem.isActive()) autoTotem.toggle(); autoTotemWasOn = false; }
+                    if (futureTotemWasOn && futureTotem != null) { if (!futureTotem.isActive()) futureTotem.toggle(); futureTotemWasOn = false; }
                 }
             })
             .build());
@@ -89,6 +89,7 @@ public class AutoMend extends Module {
             .defaultValue(2)
             .min(1)
             .max(27)
+            .visible(() -> BARITONE_PRESENT)
             .build());
 
     private final Setting<ShulkerRefillHandler.BreakTool> breakTool = sgShulker.add(
@@ -96,18 +97,21 @@ public class AutoMend extends Module {
                     .name("break-tool")
                     .description("Tool to use when breaking the shulker to pick it back up")
                     .defaultValue(ShulkerRefillHandler.BreakTool.BEST_PICKAXE)
+                    .visible(() -> BARITONE_PRESENT)
                     .build());
 
     private final Setting<Boolean> restoreInventory = sgShulker.add(new BoolSetting.Builder()
             .name("restore-inventory")
             .description("Return items taken from shulkers back to a shulker when the session ends")
             .defaultValue(true)
+            .visible(() -> BARITONE_PRESENT)
             .build());
 
     private final Setting<Boolean> autoDisable = sgShulker.add(new BoolSetting.Builder()
             .name("auto-disable")
             .description("Disable the module automatically when no more mending shulkers are found")
             .defaultValue(true)
+            .visible(() -> BARITONE_PRESENT)
             .build());
 
     private final ClickDispatcher dispatcher = new ClickDispatcher(clickDelay);
@@ -116,16 +120,18 @@ public class AutoMend extends Module {
 
     // ShulkerRefillHandler owns its own transferDispatcher (separate from the armor-swap dispatcher).
     // transferDispatcher drains only when a container IS open; main dispatcher drains only when none is open.
-    private final ShulkerRefillHandler refillHandler = new ShulkerRefillHandler(clickDelay);
+    // Null when Baritone is not installed.
+    private ShulkerRefillHandler refillHandler = null;
 
     //dependency on refillHandler
     private final Setting<Boolean> shulkerRefill = sgShulker.add(new BoolSetting.Builder()
             .name("shulker-refill")
             .description("Place a shulker of damaged mending items to restock inventory when supply runs low")
             .defaultValue(false)
+            .visible(() -> BARITONE_PRESENT)
             .onChanged(enabled -> {
                 if (!isActive()) return;
-                if (!enabled) {
+                if (!enabled && refillHandler != null) {
                     refillHandler.reset();
                     resumeRusherAura();
                     prevRefillActive = false;
@@ -140,6 +146,15 @@ public class AutoMend extends Module {
     // Camera/movement lock during refill
     private float lockedYaw, lockedPitch;
     private boolean cameraLocked = false;
+
+    // Baritone soft-dependency check
+    private static final boolean BARITONE_PRESENT;
+    static {
+        boolean present;
+        try { Class.forName("baritone.api.BaritoneAPI"); present = true; }
+        catch (ClassNotFoundException e) { present = false; }
+        BARITONE_PRESENT = present;
+    }
 
     // Rusher Aura soft-dependency (reflection — no compile-time dep required)
     private static final boolean RUSHER_PRESENT;
@@ -156,8 +171,18 @@ public class AutoMend extends Module {
     private static final long SWAP_GRACE_MS = 500L;
     private static final Consumer<String> NOOP = s -> {};
 
+    private volatile int damagedCount = 0;
+
     public AutoMend() {
-        super(HxgnAddon.CATEGORY, "auto-mender", "Wear the most-damaged mending piece so XP repairs it");
+        super(HxgnAddon.CATEGORY, "clever-mend", "Wear the most-damaged mending piece so XP repairs it");
+        refillHandler = BARITONE_PRESENT ? new ShulkerRefillHandler(clickDelay) : null;
+    }
+
+    @Override
+    public String getInfoString() {
+        if (shulkerRefill.get() && refillHandler != null && refillHandler.isActive())
+            return damagedCount + " | " + refillHandler.getState();
+        return String.valueOf(damagedCount);
     }
 
     @Override
@@ -166,7 +191,7 @@ public class AutoMend extends Module {
         manualCooldownUntil = 0L;
         swapGraceUntil = 0L;
         dispatcher.clear();
-        refillHandler.reset();
+        if (refillHandler != null) refillHandler.reset();
 
         AutoArmor autoArmor = Modules.get().get(AutoArmor.class);
         if (autoArmor != null && autoArmor.isActive()) { autoArmor.toggle(); autoArmorWasOn = true; }
@@ -185,7 +210,7 @@ public class AutoMend extends Module {
     @Override
     public void onDeactivate() {
         dispatcher.clear();
-        refillHandler.reset();
+        if (refillHandler != null) refillHandler.reset();
         cameraLocked = false;
         resumeRusherAura();
         prevRefillActive = false;
@@ -211,7 +236,7 @@ public class AutoMend extends Module {
         if (player == null) return;
 
         // ── Shulker Refill ──────────────────────────────────────────────────────────
-        if (shulkerRefill.get()) {
+        if (shulkerRefill.get() && refillHandler != null) {
             // transferDispatcher drains only when a container IS open (inverted from main).
             if (isExternalContainerOpen()) refillHandler.drainTransfer();
 
@@ -226,7 +251,7 @@ public class AutoMend extends Module {
             if (refillHandler.shouldDisable()) {
                 refillHandler.clearShouldDisable();
                 if (autoDisable.get()) {
-                    info("[AutoMender] No more damaged mending items in any shulker, disabling.");
+                    info("[CleverMend] No more damaged mending items in any shulker, disabling.");
                     toggle();
                     return;
                 }
@@ -283,6 +308,8 @@ public class AutoMend extends Module {
         List<Slot> pieces = MendingScanner.scan(player, mending);
         List<Slot> tools = MendingScanner.scanTools(player, mending);
 
+        damagedCount = (int) pieces.stream().filter(s -> s.getStack().getDamage() > 0).count()
+                     + (int) tools.stream().filter(s -> s.getStack().getDamage() > 0).count();
         Consumer<String> dbg = debug.get() ? this::info : NOOP;
 
         repairHandler.handleArmor(player, pieces, announce.get(), dbg);
@@ -296,7 +323,7 @@ public class AutoMend extends Module {
 
     @EventHandler
     private void onTickPost(TickEvent.Post event) {
-        if (!isActive() || mc.player == null || !shulkerRefill.get()) return;
+        if (!isActive() || mc.player == null || !shulkerRefill.get() || refillHandler == null) return;
         if (!refillHandler.isActive() || !refillHandler.wantsMovementLock()) return;
         Vec3d vel = mc.player.getVelocity();
         mc.player.setVelocity(0, vel.y, 0);

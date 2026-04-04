@@ -167,6 +167,12 @@ public class AutoToggle extends Module {
     }
 
     @Override
+    public String getInfoString() {
+        if (!timerEnabled.get() || disabledAt.isEmpty()) return null;
+        return disabledAt.size() + " pending";
+    }
+
+    @Override
     public void onActivate() {
         disabledAt.clear();
         lastKnownState.clear();

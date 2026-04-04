@@ -5,7 +5,6 @@ import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.meteorclient.systems.modules.Module;
-import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.entity.EntityStatuses;
 import net.minecraft.item.Items;
@@ -36,12 +35,17 @@ public class FutureTotem extends Module {
     }
 
     @Override
-    public void onActivate() {
-        AutoMend autoMend = Modules.get().get(AutoMend.class);
-        if(autoMend != null && autoMend.isActive() && this.isActive()) {
-            this.toggle(); // cant turn on if automend is on
-            return;
+    public String getInfoString() {
+        if (mc.player == null) return null;
+        int count = 0;
+        for (Slot slot : mc.player.playerScreenHandler.slots) {
+            if (slot.getStack().getItem() == Items.TOTEM_OF_UNDYING) count++;
         }
+        return String.valueOf(count);
+    }
+
+    @Override
+    public void onActivate() {
         refillCooldownUntil = 0L;
         tryRefill();
     }

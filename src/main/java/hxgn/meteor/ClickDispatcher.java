@@ -5,7 +5,6 @@ import meteordevelopment.meteorclient.utils.player.InvUtils;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
-import java.util.Objects;
 
 public class ClickDispatcher {
 
@@ -36,7 +35,7 @@ public class ClickDispatcher {
         if (!queue.isEmpty()) {
             long now = System.currentTimeMillis();
             if (now - lastClickTime >= delay.get()) {
-                Objects.requireNonNull(queue.poll()).run();
+                queue.poll().run();
                 lastClickTime = now;
             }
         }

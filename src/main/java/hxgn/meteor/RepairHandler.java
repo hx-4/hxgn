@@ -52,7 +52,7 @@ public class RepairHandler {
                                     toWear.getName().getString(), toWear.getDamage(), candidate.id));
                             if (announce && !worn.isEmpty() && worn.isDamageable()) {
                                 player.sendMessage(
-                                        Text.literal("[AutoMender] " + worn.getName().getString() + " fully repaired!"), true);
+                                        Text.literal("[CleverMend] " + worn.getName().getString() + " fully repaired!"), true);
                             }
                             dispatcher.enqueueSwap(candidate.id, armorSlotId);
                         }
@@ -91,7 +91,7 @@ public class RepairHandler {
             if (currentOffhand.getDamage() == 0) {
                 if (announce) {
                     player.sendMessage(
-                            Text.literal("[AutoMender] " + currentOffhand.getName().getString() + " fully repaired!"), true);
+                            Text.literal("[CleverMend] " + currentOffhand.getName().getString() + " fully repaired!"), true);
                 }
                 // Direct swap works even when inventory is full (no free slot needed)
                 dbg.accept("offhand: done repairing, swapping with candidate");
