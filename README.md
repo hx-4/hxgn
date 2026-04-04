@@ -5,6 +5,9 @@ It bundles a few features
 
 Auto Mender   
 - Equips low-durability gear to automatically repair everything in your inventory
+    - Optionally puts the second most damaged mending item in your offhand to repair two at once
+    - Shulker Refill: when your supply of damaged mending items runs low, places a shulker from your inventory, transfers items, breaks it, and picks it back up
+    - Restore Inventory: returns any items taken from shulkers back to a shulker when the session ends
 
 Auto Elytra Replace  
 - Exactly what it sounds like. Just a basic elytra replacing module  
