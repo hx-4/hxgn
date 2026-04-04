@@ -85,7 +85,7 @@ public class AutoMend extends Module {
 
     private final Setting<Integer> refillThreshold = sgShulker.add(new IntSetting.Builder()
             .name("refill-threshold")
-            .description("Trigger restock when damaged elytras in inventory drop below this count")
+            .description("Trigger restock when damaged mending items in inventory drop below this count")
             .defaultValue(2)
             .min(1)
             .max(27)
@@ -98,6 +98,12 @@ public class AutoMend extends Module {
                     .defaultValue(ShulkerRefillHandler.BreakTool.BEST_PICKAXE)
                     .build());
 
+    private final Setting<Boolean> restoreInventory = sgShulker.add(new BoolSetting.Builder()
+            .name("restore-inventory")
+            .description("Return items taken from shulkers back to a shulker when the session ends")
+            .defaultValue(true)
+            .build());
+
     private final ClickDispatcher dispatcher = new ClickDispatcher(clickDelay);
 
     private final RepairHandler repairHandler = new RepairHandler(dispatcher);
@@ -109,7 +115,7 @@ public class AutoMend extends Module {
     //dependency on refillHandler
     private final Setting<Boolean> shulkerRefill = sgShulker.add(new BoolSetting.Builder()
             .name("shulker-refill")
-            .description("Place a shulker of damaged elytras to restock inventory when supply runs low")
+            .description("Place a shulker of damaged mending items to restock inventory when supply runs low")
             .defaultValue(false)
             .onChanged(enabled -> {
                 if (!isActive()) return;
@@ -205,7 +211,7 @@ public class AutoMend extends Module {
 
             refillHandler.setLogger(debug.get() ? this::info : NOOP);
             boolean refillActive = refillHandler.tick(
-                player, dispatcher, refillThreshold.get(), breakTool.get());
+                player, dispatcher, refillThreshold.get(), breakTool.get(), restoreInventory.get());
 
             if (refillActive && !prevRefillActive) pauseRusherAura();
             else if (!refillActive && prevRefillActive) resumeRusherAura();
@@ -213,7 +219,7 @@ public class AutoMend extends Module {
 
             if (refillHandler.shouldDisable()) {
                 refillHandler.clearShouldDisable();
-                info("[AutoMender] No more damaged elytras in any shulker, disabling.");
+                info("[AutoMender] No more damaged mending items in any shulker, disabling.");
                 toggle();
                 return;
             }
@@ -254,7 +260,6 @@ public class AutoMend extends Module {
         }
 
         if (System.currentTimeMillis() < manualCooldownUntil) {
-            if (debug.get()) info("Cooldown: %.1fs left", (manualCooldownUntil - System.currentTimeMillis()) / 1000.0);
             return;
         }
 
@@ -271,13 +276,6 @@ public class AutoMend extends Module {
         List<Slot> tools = MendingScanner.scanTools(player, mending);
 
         Consumer<String> dbg = debug.get() ? this::info : NOOP;
-
-        if (debug.get()) {
-            String pieceNames = pieces.isEmpty() ? "none" : pieces.stream()
-                    .map(s -> s.getStack().getName().getString() + "(dmg=" + s.getStack().getDamage() + ",s=" + s.id + ")")
-                    .reduce((a, b) -> a + ", " + b).orElse("");
-            info("Pieces[%d]: %s | Tools[%d]", pieces.size(), pieceNames, tools.size());
-        }
 
         repairHandler.handleArmor(player, pieces, announce.get(), dbg);
         if (!dispatcher.isEmpty()) {

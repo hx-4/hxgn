@@ -82,16 +82,12 @@ public class RepairHandler {
             return;
         }
 
-        dbg.accept(String.format("offhand: candidate=%s(dmg=%d,s=%d)",
-                candidate.getStack().getName().getString(), candidate.getStack().getDamage(), candidate.id));
-
         ItemStack currentOffhand = player.playerScreenHandler.getSlot(OFFHAND_SLOT_ID).getStack();
         boolean offhandHasMendingItem = !currentOffhand.isEmpty()
                 && currentOffhand.isDamageable()
                 && EnchantmentHelper.getLevel(mendingHolder, currentOffhand) > 0;
 
         if (offhandHasMendingItem) {
-            dbg.accept(String.format("offhand: current=%s(dmg=%d)", currentOffhand.getName().getString(), currentOffhand.getDamage()));
             if (currentOffhand.getDamage() == 0) {
                 if (announce) {
                     player.sendMessage(
@@ -109,7 +105,6 @@ public class RepairHandler {
         }
 
         if (ItemStack.areItemsAndComponentsEqual(currentOffhand, candidate.getStack())) {
-            dbg.accept("offhand: candidate already in offhand");
             return;
         }
 

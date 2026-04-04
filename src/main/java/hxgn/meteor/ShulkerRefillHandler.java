@@ -21,8 +21,11 @@ import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.ContainerComponent;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.ItemEntity;
+import net.minecraft.enchantment.Enchantment;
+import net.minecraft.enchantment.EnchantmentHelper;
+import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
+import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.registry.tag.ItemTags;
 import net.minecraft.screen.ShulkerBoxScreenHandler;
 import net.minecraft.screen.slot.Slot;
@@ -39,13 +42,15 @@ import net.minecraft.world.RaycastContext;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 
 /**
- * State machine that handles restocking AutoMender's supply of damaged elytras
- * by placing a shulker box, swapping elytras, and picking the shulker back up.
+ * State machine that handles restocking AutoMender's supply of damaged mending items
+ * by placing a shulker box, transferring items, and picking the shulker back up.
  *
  * States: IDLE → PREPARING → PLACING → OPENING → TRANSFERRING → CLOSING → BREAKING → COLLECTING
  *
@@ -84,8 +89,6 @@ public class ShulkerRefillHandler {
     private static final long POST_PICKUP_COOLDOWN_MS = 2000L;
     private static final int  MAX_OPEN_RETRIES      = 3;
 
-    private static final int CHEST_SLOT_PSH = 6; // playerScreenHandler chest slot
-
     private final MinecraftClient mc = MinecraftClient.getInstance();
     private final ClickDispatcher transferDispatcher;
     private Consumer<String> log = s -> {};
@@ -119,6 +122,10 @@ public class ShulkerRefillHandler {
     private boolean shouldDisable          = false;
     private long idleRetryAfter            = 0L;
     private boolean closeSent              = false;
+    private boolean returningMode          = false;
+
+    /** Items taken from shulkers that have not yet been returned (item type → count). */
+    private final Map<Item, Integer> itemsFromShulker = new LinkedHashMap<>();
 
     private final Set<BlockPos> failedPositions = new HashSet<>();
 
@@ -150,6 +157,9 @@ public class ShulkerRefillHandler {
 
     public void reset() {
         if (swappedForBreaking) { InvUtils.swapBack(); swappedForBreaking = false; }
+        if (swapTargetHotbarSlot != -1 && swapDisplacedInventorySlot != -1) {
+            InvUtils.quickSwap().fromId(swapTargetHotbarSlot).to(swapDisplacedInventorySlot);
+        }
         transferDispatcher.clear();
         if (canBaritone() && baritoneSettingsOverridden) stopBaritone();
         state = State.IDLE;
@@ -167,6 +177,8 @@ public class ShulkerRefillHandler {
         lastEntityTargetPos = null;
         swapTargetHotbarSlot = -1;
         swapDisplacedInventorySlot = -1;
+        returningMode = false;
+        itemsFromShulker.clear();
         failedPositions.clear();
     }
 
@@ -175,23 +187,45 @@ public class ShulkerRefillHandler {
     public boolean tick(ClientPlayerEntity player,
                         ClickDispatcher mainDispatcher,
                         int threshold,
-                        BreakTool breakTool) {
+                        BreakTool breakTool,
+                        boolean returnOnDone) {
         ClientWorld world = mc.world;
         if (world == null) return false;
+        RegistryEntry<Enchantment> mending = MendingScanner.resolveMending(world);
 
         return switch (state) {
 
             // ── IDLE ─────────────────────────────────────────────────────────────
             case IDLE -> {
+                // Returning cycle just finished — we're done
+                if (returningMode) {
+                    log.accept("IDLE: deposit cycle complete → shouldDisable");
+                    returningMode = false;
+                    shouldDisable = true;
+                    yield false;
+                }
+
                 if (!mainDispatcher.isEmpty()) yield false;
                 if (System.currentTimeMillis() < idleRetryAfter) yield false;
 
-                int dmgCount = countDamagedElytras(player);
+                int dmgCount = countDamagedMendingItems(player, mending);
                 if (dmgCount >= threshold) yield false;
 
-                FindItemResult shulkerResult = findElytraShulker();
+                FindItemResult shulkerResult = findMendingShulker(mending);
                 if (!shulkerResult.found()) {
-                    log.accept("IDLE: no elytra shulker found → shouldDisable=true");
+                    if (returnOnDone && !itemsFromShulker.isEmpty()) {
+                        FindItemResult returnShulker = findReturnShulker();
+                        if (returnShulker.found()) {
+                            int total = itemsFromShulker.values().stream().mapToInt(Integer::intValue).sum();
+                            log.accept(String.format("IDLE: no more mending shulkers, depositing %d tracked items", total));
+                            returningMode = true;
+                            originalPos = player.getBlockPos();
+                            shulkerCountBeforePlace = countShulkers(player);
+                            enterState(State.PREPARING);
+                            yield true;
+                        }
+                    }
+                    log.accept("IDLE: no mending shulker found → shouldDisable=true");
                     shouldDisable = true;
                     yield false;
                 }
@@ -205,7 +239,7 @@ public class ShulkerRefillHandler {
 
             // ── PREPARING ────────────────────────────────────────────────────────
             case PREPARING -> {
-                FindItemResult shulkerResult = findElytraShulker();
+                FindItemResult shulkerResult = returningMode ? findReturnShulker() : findMendingShulker(mending);
                 if (!shulkerResult.found()) {
                     log.accept("PREPARING: shulker disappeared → IDLE");
                     enterState(State.IDLE);
@@ -247,7 +281,7 @@ public class ShulkerRefillHandler {
 
                 // Send placement once
                 if (!placementSent) {
-                    FindItemResult shulkerResult = findElytraShulker();
+                    FindItemResult shulkerResult = returningMode ? findReturnShulker() : findMendingShulker(mending);
                     if (!shulkerResult.found() || !shulkerResult.isHotbar()) {
                         log.accept("PLACING: shulker not in hotbar → IDLE");
                         enterState(State.IDLE);
@@ -362,18 +396,25 @@ public class ShulkerRefillHandler {
 
                 switch (transferPhase) {
                     case SENDING -> {
-                        int queued = queueRepairedToShulker(player, handler, containerSlots);
+                        int queued = returningMode
+                            ? queueItemsToReturn(handler, containerSlots)
+                            : queueRepairedToShulker(player, handler, containerSlots, mending);
                         if (queued > 0) {
                             log.accept(String.format("TRANSFERRING/SENDING: queued %d clicks", queued));
                             yield true;
                         }
-                        // Nothing more to send → switch to TAKING
-                        log.accept("TRANSFERRING: SENDING done → TAKING");
-                        transferPhase = TransferPhase.TAKING;
-                        transferPhaseEnteredAt = System.currentTimeMillis();
+                        if (returningMode) {
+                            log.accept("TRANSFERRING: deposit done → CLOSING");
+                            enterState(State.CLOSING);
+                        } else {
+                            // Nothing more to send → switch to TAKING
+                            log.accept("TRANSFERRING: SENDING done → TAKING");
+                            transferPhase = TransferPhase.TAKING;
+                            transferPhaseEnteredAt = System.currentTimeMillis();
+                        }
                     }
                     case TAKING -> {
-                        int queued = queueDamagedFromShulker(handler, containerSlots);
+                        int queued = queueDamagedFromShulker(handler, containerSlots, mending);
                         if (queued > 0) {
                             log.accept(String.format("TRANSFERRING/TAKING: queued %d clicks", queued));
                             yield true;
@@ -524,18 +565,25 @@ public class ShulkerRefillHandler {
     // ── Transfer Algorithms ─────────────────────────────────────────────────────
 
     /**
-     * Queue clicks to send FULLY REPAIRED elytras from player → shulker.
+     * Queue clicks to send FULLY REPAIRED mending items from player → shulker.
      * Strategy A: shift-click into empty shulker slots.
-     * Strategy B: 3-click cursor-swap with damaged elytras in shulker when full.
+     * Strategy B: 3-click cursor-swap with damaged mending items in shulker when full.
      */
     private int queueRepairedToShulker(ClientPlayerEntity player,
                                        ShulkerBoxScreenHandler handler,
-                                       int containerSlots) {
+                                       int containerSlots,
+                                       RegistryEntry<Enchantment> mending) {
+        Map<Item, Integer> remaining = new LinkedHashMap<>(itemsFromShulker);
         List<Integer> repairedPlayerGI = new ArrayList<>();
         for (int gi = containerSlots; gi < handler.slots.size(); gi++) {
             ItemStack stack = handler.getSlot(gi).getStack();
-            if (stack.getItem() == Items.ELYTRA && stack.getDamage() == 0)
+            if (!isRepairedMending(mending, stack)) continue;
+            Item item = stack.getItem();
+            int rem = remaining.getOrDefault(item, 0);
+            if (rem > 0) {
                 repairedPlayerGI.add(gi);
+                remaining.put(item, rem - 1);
+            }
         }
         if (repairedPlayerGI.isEmpty()) return 0;
 
@@ -544,19 +592,24 @@ public class ShulkerRefillHandler {
         for (int i = 0; i < containerSlots; i++) {
             ItemStack s = handler.getSlot(i).getStack();
             if (s.isEmpty()) emptyShulkerGI.add(i);
-            else if (s.getItem() == Items.ELYTRA && s.getDamage() > 0) damagedShulkerGI.add(i);
+            else if (isDamagedMending(mending, s)) damagedShulkerGI.add(i);
         }
 
         int emptyIdx = 0, damagedIdx = 0, queued = 0;
         for (int playerGI : repairedPlayerGI) {
+            Item item = handler.getSlot(playerGI).getStack().getItem();
             if (emptyIdx < emptyShulkerGI.size()) {
                 transferDispatcher.enqueueClick(playerGI, true);
                 emptyIdx++;
                 queued++;
+                // This item is being returned — remove it from tracking
+                itemsFromShulker.computeIfPresent(item, (k, v) -> v <= 1 ? null : v - 1);
             } else if (damagedIdx < damagedShulkerGI.size()) {
                 transferDispatcher.enqueueSwap(playerGI, damagedShulkerGI.get(damagedIdx));
                 damagedIdx++;
                 queued += 3;
+                // This item is being returned — remove it from tracking
+                itemsFromShulker.computeIfPresent(item, (k, v) -> v <= 1 ? null : v - 1);
             } else {
                 break;
             }
@@ -565,10 +618,11 @@ public class ShulkerRefillHandler {
     }
 
     /**
-     * Queue shift-clicks to pull DAMAGED elytras from shulker → player.
+     * Queue shift-clicks to pull DAMAGED mending items from shulker → player.
      * Reserves 1 free player slot for the shulker item after breaking.
      */
-    private int queueDamagedFromShulker(ShulkerBoxScreenHandler handler, int containerSlots) {
+    private int queueDamagedFromShulker(ShulkerBoxScreenHandler handler, int containerSlots,
+                                        RegistryEntry<Enchantment> mending) {
         int freePlayerSlots = 0;
         for (int gi = containerSlots; gi < handler.slots.size(); gi++) {
             if (handler.getSlot(gi).getStack().isEmpty()) freePlayerSlots++;
@@ -578,10 +632,12 @@ public class ShulkerRefillHandler {
         int queued = 0;
         for (int i = 0; i < containerSlots && freePlayerSlots > 0; i++) {
             ItemStack s = handler.getSlot(i).getStack();
-            if (s.getItem() == Items.ELYTRA && s.getDamage() > 0) {
+            if (isDamagedMending(mending, s)) {
                 transferDispatcher.enqueueClick(i, true);
                 freePlayerSlots--;
                 queued++;
+                // Track this item — it came from a shulker
+                itemsFromShulker.merge(s.getItem(), 1, Integer::sum);
             }
         }
         return queued;
@@ -589,11 +645,19 @@ public class ShulkerRefillHandler {
 
     // ── Counting Utilities ──────────────────────────────────────────────────────
 
-    private int countDamagedElytras(ClientPlayerEntity player) {
+    private static boolean isDamagedMending(RegistryEntry<Enchantment> mending, ItemStack stack) {
+        return stack.isDamageable() && stack.getDamage() > 0 && EnchantmentHelper.getLevel(mending, stack) > 0;
+    }
+
+    private static boolean isRepairedMending(RegistryEntry<Enchantment> mending, ItemStack stack) {
+        return stack.isDamageable() && stack.getDamage() == 0 && EnchantmentHelper.getLevel(mending, stack) > 0;
+    }
+
+    private int countDamagedMendingItems(ClientPlayerEntity player, RegistryEntry<Enchantment> mending) {
         int count = 0;
         for (Slot s : player.playerScreenHandler.slots) {
-            if (s.id == CHEST_SLOT_PSH) continue;
-            if (s.getStack().getItem() == Items.ELYTRA && s.getStack().getDamage() > 0) count++;
+            if (s.id < 9 || s.id > 44) continue; // skip equipment slots and offhand
+            if (isDamagedMending(mending, s.getStack())) count++;
         }
         return count;
     }
@@ -628,13 +692,55 @@ public class ShulkerRefillHandler {
 
     // ── Lookup Utilities ────────────────────────────────────────────────────────
 
-    private FindItemResult findElytraShulker() {
+    private FindItemResult findMendingShulker(RegistryEntry<Enchantment> mending) {
         return InvUtils.find(stack -> {
             if (!stack.isIn(ItemTags.SHULKER_BOXES)) return false;
             ContainerComponent c = stack.get(DataComponentTypes.CONTAINER);
             if (c == null) return false;
-            return c.streamNonEmpty().anyMatch(s -> s.getItem() == Items.ELYTRA && s.getDamage() > 0);
+            return c.streamNonEmpty().anyMatch(s -> isDamagedMending(mending, s));
         });
+    }
+
+    /** Finds any shulker in inventory with at least one free slot to accept items. */
+    private FindItemResult findReturnShulker() {
+        return InvUtils.find(stack -> {
+            if (!stack.isIn(ItemTags.SHULKER_BOXES)) return false;
+            ContainerComponent c = stack.get(DataComponentTypes.CONTAINER);
+            if (c == null) return true; // completely empty shulker — all 27 slots free
+            return c.streamNonEmpty().count() < 27;
+        });
+    }
+
+    /**
+     * Queue shift-clicks to deposit tracked items (from itemsFromShulker) into the open shulker.
+     * Generic — works for any item type, not just elytras.
+     * Updates itemsFromShulker to reflect what was queued.
+     */
+    private int queueItemsToReturn(ShulkerBoxScreenHandler handler, int containerSlots) {
+        int freeShulkerSlots = 0;
+        for (int i = 0; i < containerSlots; i++) {
+            if (handler.getSlot(i).getStack().isEmpty()) freeShulkerSlots++;
+        }
+
+        int queued = 0;
+        for (Item targetItem : new ArrayList<>(itemsFromShulker.keySet())) {
+            int remaining = itemsFromShulker.getOrDefault(targetItem, 0);
+            for (int gi = containerSlots; gi < handler.slots.size() && remaining > 0 && freeShulkerSlots > 0; gi++) {
+                if (handler.getSlot(gi).getStack().getItem() == targetItem) {
+                    transferDispatcher.enqueueClick(gi, true);
+                    remaining--;
+                    freeShulkerSlots--;
+                    queued++;
+                }
+            }
+            int deposited = itemsFromShulker.getOrDefault(targetItem, 0) - remaining;
+            if (deposited > 0) {
+                itemsFromShulker.merge(targetItem, -deposited, Integer::sum);
+                if (itemsFromShulker.getOrDefault(targetItem, 0) <= 0)
+                    itemsFromShulker.remove(targetItem);
+            }
+        }
+        return queued;
     }
 
     private int findFreeHotbarSlot(ClientPlayerEntity player) {
