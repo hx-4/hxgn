@@ -229,8 +229,6 @@ public class AutoMend extends Module {
                     info("[AutoMender] No more damaged mending items in any shulker, disabling.");
                     toggle();
                     return;
-                } else {
-                    info("[AutoMender] No more damaged mending items in any shulker.");
                 }
             }
 

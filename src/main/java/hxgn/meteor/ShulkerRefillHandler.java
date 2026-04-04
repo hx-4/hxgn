@@ -87,6 +87,7 @@ public class ShulkerRefillHandler {
     private static final long BREAK_TIMEOUT_MS      = 10000L;
     private static final long COLLECT_TIMEOUT_MS    = 15000L;
     private static final long POST_PICKUP_COOLDOWN_MS = 2000L;
+    private static final long NO_SHULKER_BACKOFF_MS  = 30_000L;
     private static final int  MAX_OPEN_RETRIES      = 3;
 
     private final MinecraftClient mc = MinecraftClient.getInstance();
@@ -202,6 +203,7 @@ public class ShulkerRefillHandler {
                     log.accept("IDLE: deposit cycle complete → shouldDisable");
                     returningMode = false;
                     shouldDisable = true;
+                    idleRetryAfter = System.currentTimeMillis() + NO_SHULKER_BACKOFF_MS;
                     yield false;
                 }
 
@@ -227,6 +229,7 @@ public class ShulkerRefillHandler {
                     }
                     log.accept("IDLE: no mending shulker found → shouldDisable=true");
                     shouldDisable = true;
+                    idleRetryAfter = System.currentTimeMillis() + NO_SHULKER_BACKOFF_MS;
                     yield false;
                 }
 
