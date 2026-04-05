@@ -12,11 +12,9 @@ import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.item.Items;
 import net.minecraft.item.ItemStack;
-import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
 import net.minecraft.screen.slot.Slot;
 import net.minecraft.text.Text;
 
-import java.util.Objects;
 
 /*
 
@@ -83,46 +81,30 @@ public class AutoElytraReplace extends Module {
         if (worn.isEmpty() || worn.getItem() != Items.ELYTRA) return;
         if (worn.getMaxDamage() - worn.getDamage() > threshold.get()) return;
 
-        boolean hasFreeSlot = InvUtils.findEmpty().found();
-
         Slot replacement = findBestElytra(player);
         if (replacement != null) {
-            enqueueReplace(replacement.id, hasFreeSlot);
-            redeployElytra(player);
+            enqueueReplace(replacement.id);
             return;
         }
 
         replacement = findChestplate(player);
         if (replacement != null) {
-            enqueueReplace(replacement.id, hasFreeSlot);
+            enqueueReplace(replacement.id);
             return;
         }
 
-        if (hasFreeSlot) {
+        if (InvUtils.findEmpty().found()) {
             dispatcher.enqueueClick(CHEST_SLOT_ID, true);
-            return;
-        }
-
-        player.sendMessage(
-                Text.literal("[AutoElytraReplace] Elytra critical! No replacement and inventory full!"), true);
-    }
-
-    // Uses two atomic shift-clicks (QUICK_MOVE) when a free slot is available,
-    // avoiding mid-sequence server syncs from things like firework use.
-    // Falls back to 3-click cursor swap when inventory is full.
-    private void enqueueReplace(int replacementSlotId, boolean hasFreeSlot) {
-        if (hasFreeSlot) {
-            dispatcher.enqueueClick(CHEST_SLOT_ID, true);
-            dispatcher.enqueueClick(replacementSlotId, true);
         } else {
-            dispatcher.enqueueSwap(replacementSlotId, CHEST_SLOT_ID);
+            player.sendMessage(
+                    Text.literal("[AutoElytraReplace] Elytra critical! No replacement and inventory full!"), true);
         }
     }
 
-    private void redeployElytra(ClientPlayerEntity player) {
-        if(player.isGliding()) return;
-        assert mc.player != null;
-        Objects.requireNonNull(mc.getNetworkHandler()).sendPacket(new ClientCommandC2SPacket(mc.player, ClientCommandC2SPacket.Mode.START_FALL_FLYING));
+    // 3-click cursor swap: pick up replacement, swap onto chest slot, place old elytra back.
+    // The chest slot is never empty during the swap, so gliding is never interrupted.
+    private void enqueueReplace(int replacementSlotId) {
+        dispatcher.enqueueSwap(replacementSlotId, CHEST_SLOT_ID);
     }
 
     private Slot findBestElytra(ClientPlayerEntity player) {
