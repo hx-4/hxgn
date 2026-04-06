@@ -215,7 +215,7 @@ public class ShulkerRefillHandler {
                 // Ensure shulker is in hotbar
                 if (!shulkerResult.isHotbar()) {
                     int target = findFreeHotbarSlot(player);
-                    if (target == -1) target = player.getInventory().selectedSlot;
+                    if (target == -1) target = player.getInventory().getSelectedSlot();
                     swapTargetHotbarSlot = target;
                     swapDisplacedInventorySlot = shulkerResult.slot();
                     log.accept(String.format("PREPARING: quickSwap slot%d → hotbar[%d]", shulkerResult.slot(), target));
@@ -640,7 +640,7 @@ public class ShulkerRefillHandler {
             }
         }
         candidates.sort(Comparator.comparingDouble(p ->
-            Vec3d.ofCenter(p).squaredDistanceTo(player.getPos())));
+            Vec3d.ofCenter(p).squaredDistanceTo(player.getEntityPos())));
 
         for (BlockPos pos : candidates) {
             if (failedPositions.contains(pos)) continue;

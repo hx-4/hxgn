@@ -2,7 +2,8 @@ package hxgn.meteor;
 
 import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.WidgetScreen;
-import meteordevelopment.meteorclient.gui.utils.IScreenFactory;
+import meteordevelopment.meteorclient.settings.GenericSetting;
+import meteordevelopment.meteorclient.settings.IGeneric;
 import meteordevelopment.meteorclient.utils.misc.ICopyable;
 import meteordevelopment.meteorclient.utils.misc.ISerializable;
 import net.minecraft.nbt.NbtCompound;
@@ -13,7 +14,7 @@ import net.minecraft.nbt.NbtString;
 import java.util.ArrayList;
 import java.util.List;
 
-public class ConditionalRuleList implements ICopyable<ConditionalRuleList>, ISerializable<ConditionalRuleList>, IScreenFactory {
+public class ConditionalRuleList implements IGeneric<ConditionalRuleList> {
 
     // ── Action types ──────────────────────────────────────────────────────────
 
@@ -102,39 +103,37 @@ public class ConditionalRuleList implements ICopyable<ConditionalRuleList>, ISer
 
         public static ConditionalRule fromNbt(NbtCompound tag) {
             TriggerType type;
-            try { type = TriggerType.valueOf(tag.getString("triggerType")); }
+            try { type = TriggerType.valueOf(tag.getString("triggerType", "")); }
             catch (IllegalArgumentException e) { type = TriggerType.MODULE_ON; }
 
             ActionType action;
-            try { action = ActionType.valueOf(tag.getString("action")); }
+            try { action = ActionType.valueOf(tag.getString("action", "")); }
             catch (IllegalArgumentException e) {
                 // Migrate from old boolean enableTarget field
-                action = tag.getBoolean("enable") ? ActionType.ENABLE : ActionType.DISABLE;
+                action = tag.getBoolean("enable", false) ? ActionType.ENABLE : ActionType.DISABLE;
             }
 
             List<String> triggers = new ArrayList<>();
-            if (tag.contains("triggerModules", NbtElement.LIST_TYPE)) {
-                NbtList tlist = tag.getList("triggerModules", NbtElement.STRING_TYPE);
-                for (NbtElement e : tlist) triggers.add(e.asString());
+            if (tag.contains("triggerModules")) {
+                for (NbtElement e : tag.getListOrEmpty("triggerModules")) triggers.add(e.asString().orElse(""));
             } else {
-                String old = tag.getString("triggerModuleId");
+                String old = tag.getString("triggerModuleId", "");
                 if (!old.isEmpty()) triggers.add(old);
             }
 
             List<String> targets = new ArrayList<>();
-            if (tag.contains("targets", NbtElement.LIST_TYPE)) {
-                NbtList tlist = tag.getList("targets", NbtElement.STRING_TYPE);
-                for (NbtElement e : tlist) targets.add(e.asString());
+            if (tag.contains("targets")) {
+                for (NbtElement e : tag.getListOrEmpty("targets")) targets.add(e.asString().orElse(""));
             } else {
-                String old = tag.getString("target");
+                String old = tag.getString("target", "");
                 if (!old.isEmpty()) targets.add(old);
             }
 
             return new ConditionalRule(type, triggers,
-                tag.getString("triggerText"), tag.getInt("triggerThreshold"),
-                tag.getString("triggerResponse"), tag.getInt("triggerResponseTimeout"),
+                tag.getString("triggerText", ""), tag.getInt("triggerThreshold", 0),
+                tag.getString("triggerResponse", ""), tag.getInt("triggerResponseTimeout", 0),
                 action, targets,
-                tag.getInt("turnBack"), tag.getBoolean("revert"));
+                tag.getInt("turnBack", 0), tag.getBoolean("revert", false));
         }
     }
 
@@ -177,17 +176,16 @@ public class ConditionalRuleList implements ICopyable<ConditionalRuleList>, ISer
     @Override
     public ConditionalRuleList fromTag(NbtCompound tag) {
         rules.clear();
-        if (tag.contains("rules", NbtElement.LIST_TYPE)) {
-            NbtList list = tag.getList("rules", NbtElement.COMPOUND_TYPE);
-            for (NbtElement e : list) rules.add(ConditionalRule.fromNbt((NbtCompound) e));
+        if (tag.contains("rules")) {
+            for (NbtElement e : tag.getListOrEmpty("rules")) rules.add(ConditionalRule.fromNbt((NbtCompound) e));
         }
         return this;
     }
 
-    // ── IScreenFactory ────────────────────────────────────────────────────────
+    // ── IGeneric ──────────────────────────────────────────────────────────────
 
     @Override
-    public WidgetScreen createScreen(GuiTheme theme) {
+    public WidgetScreen createScreen(GuiTheme theme, GenericSetting<ConditionalRuleList> setting) {
         return new ConditionalRuleScreen(theme, this);
     }
 }

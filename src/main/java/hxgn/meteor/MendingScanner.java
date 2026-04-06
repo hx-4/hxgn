@@ -36,7 +36,7 @@ public final class MendingScanner {
 
     public static List<Slot> scanTools(ClientPlayerEntity player, RegistryEntry<Enchantment> mending) {
         // hotbar slots in the playerScreenHandler are at container IDs 36-44 (index + 36)
-        final int selectedContainerSlotId = 36 + player.getInventory().selectedSlot;
+        final int selectedContainerSlotId = 36 + player.getInventory().getSelectedSlot();
 
         return player.playerScreenHandler.slots.stream()
                 .filter(s -> !s.getStack().isEmpty())
