@@ -26,5 +26,8 @@ Future Totem
     - Active HUD: shows totem count in inventory
 
 Auto Toggle
-- Toggles modules on and off automatically based on triggers and timers
-    - Active HUD: shows number of modules pending timer re-enable
+- Toggles modules on and off automatically based on a customizable set of conditional _rules_
+  -  You can create as many _rules_ as you want. Each _rule_ contains a:
+    - Trigger (module **activation**, **login**, **attacking**, etc) and an
+    - Action (**enable** or **disable** a module _permanently_ or _temporarily_)
+- Smart Totem trigger (fall height prediction & health boundary)

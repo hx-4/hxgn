@@ -33,30 +33,50 @@ public class RepairHandler {
         return id >= 9 && id <= 44;
     }
 
-    public void handleArmor(ClientPlayerEntity player, List<Slot> mendingPieces, boolean announce, Consumer<String> dbg) {
+    public void handleArmor(ClientPlayerEntity player, List<Slot> mendingPieces,
+                            RegistryEntry<Enchantment> mending, boolean announce, Consumer<String> dbg) {
         List<Slot> movable = mendingPieces.stream().filter(s -> isMovableSlot(s.id)).toList();
         for (int i = 0; i < ARMOR_SLOTS.length; i++) {
             final int armorSlotId = ARMOR_SLOT_IDS[i];
             final EquipmentSlot slot = ARMOR_SLOTS[i];
 
-            movable.stream()
+            java.util.Optional<Slot> candidateOpt = movable.stream()
                     .filter(s -> player.getPreferredEquipmentSlot(s.getStack()) == slot)
-                    .findFirst()
-                    .ifPresent(candidate -> {
-                        ItemStack worn = player.playerScreenHandler.getSlot(armorSlotId).getStack();
-                        ItemStack toWear = candidate.getStack();
-                        // Only equip the inventory piece when the currently worn one is fully repaired
-                        if (toWear.getDamage() > 0 && worn.getDamage() == 0) {
-                            dbg.accept(String.format("armor %s: worn=%s(dmg=%d) → swapping in %s(dmg=%d,s=%d)",
-                                    slot.getName(), worn.getName().getString(), worn.getDamage(),
-                                    toWear.getName().getString(), toWear.getDamage(), candidate.id));
-                            if (announce && !worn.isEmpty() && worn.isDamageable()) {
-                                player.sendMessage(
-                                        Text.literal("[CleverMend] " + worn.getName().getString() + " fully repaired!"), true);
-                            }
-                            dispatcher.enqueueSwap(candidate.id, armorSlotId);
-                        }
-                    });
+                    .findFirst();
+
+            ItemStack worn = player.playerScreenHandler.getSlot(armorSlotId).getStack();
+            if (candidateOpt.isPresent()) {
+                Slot candidate = candidateOpt.get();
+                ItemStack toWear = candidate.getStack();
+                // Only equip the inventory piece when the currently worn one is fully repaired
+                if (toWear.getDamage() > 0 && worn.getDamage() == 0) {
+                    dbg.accept(String.format("armor %s: worn=%s(dmg=%d) → swapping in %s(dmg=%d,s=%d)",
+                            slot.getName(), worn.getName().getString(), worn.getDamage(),
+                            toWear.getName().getString(), toWear.getDamage(), candidate.id));
+                    if (announce && !worn.isEmpty() && worn.isDamageable()) {
+                        player.sendMessage(
+                                Text.literal("[CleverMend] " + worn.getName().getString() + " fully repaired!"), true);
+                    }
+
+                    dispatcher.enqueueSwap(candidate.id, armorSlotId);
+                }
+            } else if (!worn.isEmpty() && worn.getDamage() == 0
+                    && EnchantmentHelper.getLevel(mending, worn) > 0) {
+                // Repaired mending piece with no damaged replacement — unequip back to inventory,
+                // but only if there's another copy of the same item in the inventory (even undamaged).
+                // If it's the last one, keep it equipped.
+                boolean hasDuplicate = player.playerScreenHandler.slots.stream()
+                        .anyMatch(s -> isMovableSlot(s.id) && s.getStack().getItem() == worn.getItem());
+                if (!hasDuplicate) continue;
+
+                dbg.accept(String.format("armor %s: %s repaired, no replacement, unequipping",
+                        slot.getName(), worn.getName().getString()));
+                if (announce) {
+                    player.sendMessage(
+                            Text.literal("[CleverMend] " + worn.getName().getString() + " fully repaired!"), true);
+                }
+                dispatcher.enqueueClick(armorSlotId, true);
+            }
         }
     }
 
@@ -79,6 +99,18 @@ public class RepairHandler {
         } else if (!invTools.isEmpty() && invTools.get(0).getStack().getDamage() > 0) {
             candidate = invTools.get(0);
         } else {
+            // No damaged candidates. If offhand holds a now-repaired mending item, unequip it.
+            ItemStack currentOffhand = player.playerScreenHandler.getSlot(OFFHAND_SLOT_ID).getStack();
+            if (!currentOffhand.isEmpty() && currentOffhand.isDamageable()
+                    && currentOffhand.getDamage() == 0
+                    && EnchantmentHelper.getLevel(mendingHolder, currentOffhand) > 0) {
+                dbg.accept("offhand: repaired, no more damaged candidates, unequipping");
+                if (announce) {
+                    player.sendMessage(
+                            Text.literal("[CleverMend] " + currentOffhand.getName().getString() + " fully repaired!"), true);
+                }
+                dispatcher.enqueueClick(OFFHAND_SLOT_ID, true);
+            }
             return;
         }
 

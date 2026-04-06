@@ -1,5 +1,9 @@
 package hxgn.meteor.modules;
 
+import hxgn.meteor.ConditionalRuleList;
+import hxgn.meteor.ConditionalRuleList.ActionType;
+import hxgn.meteor.ConditionalRuleList.ConditionalRule;
+import hxgn.meteor.ConditionalRuleList.TriggerType;
 import hxgn.meteor.HxgnAddon;
 import meteordevelopment.meteorclient.events.entity.player.AttackEntityEvent;
 import meteordevelopment.meteorclient.events.meteor.ActiveModulesChangedEvent;
@@ -12,112 +16,36 @@ import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.util.math.BlockPos;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class AutoToggle extends Module {
+    // ── Info Label ────────────────────────────────────────────────────────────
+    private final SettingGroup sgInfo = settings.createGroup("Info Label");
 
-    // ── Timer ─────────────────────────────────────────────────────────────────
-    private final SettingGroup sgTimer = settings.createGroup("Timer");
+    private final Setting<Boolean> showInfo = sgInfo.add(new BoolSetting.Builder()
+        .name("show-info")
+        .description("Show rule and timer counts on the Active Modules HUD")
+        .defaultValue(true)
+        .build());
 
-    private final Setting<Boolean> timerEnabled = sgTimer.add(new BoolSetting.Builder()
-        .name("enabled")
+    private final Setting<Boolean> shorthandInfo = sgInfo.add(new BoolSetting.Builder()
+        .name("shorthand-info")
+        .description("Compact format: rules|pending")
         .defaultValue(false)
         .build());
 
-    private final Setting<List<Module>> timerModules = sgTimer.add(new ModuleListSetting.Builder()
-        .name("modules")
-        .description("Modules to re-enable after a delay when turned off")
-        .visible(timerEnabled::get)
-        .build());
+    // ── Conditional Rules ─────────────────────────────────────────────────────
+    private final SettingGroup sgConditional = settings.createGroup("Conditional Rules");
 
-    private final Setting<Integer> timerDelay = sgTimer.add(new IntSetting.Builder()
-        .name("delay")
-        .description("Seconds before a disabled module is re-enabled")
-        .defaultValue(30)
-        .sliderRange(1,60)
-        .visible(timerEnabled::get)
-        .build());
-
-    // ── On Login ──────────────────────────────────────────────────────────────
-    private final SettingGroup sgLogin = settings.createGroup("On Login");
-
-    private final Setting<Boolean> loginEnabled = sgLogin.add(new BoolSetting.Builder()
-        .name("enabled")
-        .defaultValue(true)
-        .build());
-
-    private final Setting<List<Module>> loginEnable = sgLogin.add(new ModuleListSetting.Builder()
-        .name("enable")
-        .description("Modules to turn ON when joining a world or server")
-        .visible(loginEnabled::get)
-        .build());
-
-    private final Setting<List<Module>> loginDisable = sgLogin.add(new ModuleListSetting.Builder()
-        .name("disable")
-        .description("Modules to turn OFF when joining a world or server")
-        .visible(loginEnabled::get)
-        .build());
-
-    // ── On Damage ─────────────────────────────────────────────────────────────
-    private final SettingGroup sgDamage = settings.createGroup("On Damage");
-
-    private final Setting<Boolean> damageEnabled = sgDamage.add(new BoolSetting.Builder()
-        .name("enabled")
-        .defaultValue(true)
-        .build());
-
-    private final Setting<List<Module>> damageEnable = sgDamage.add(new ModuleListSetting.Builder()
-        .name("enable")
-        .description("Modules to turn ON when taking damage")
-        .visible(damageEnabled::get)
-        .build());
-
-    private final Setting<List<Module>> damageDisable = sgDamage.add(new ModuleListSetting.Builder()
-        .name("disable")
-        .description("Modules to turn OFF when taking damage")
-        .visible(damageEnabled::get)
-        .build());
-
-    // ── On Attack ─────────────────────────────────────────────────────────────
-    private final SettingGroup sgAttack = settings.createGroup("On Attack");
-
-    private final Setting<Boolean> attackEnabled = sgAttack.add(new BoolSetting.Builder()
-        .name("enabled")
-        .defaultValue(true)
-        .build());
-
-    private final Setting<List<Module>> attackEnable = sgAttack.add(new ModuleListSetting.Builder()
-        .name("enable")
-        .description("Modules to turn ON when attacking an entity")
-        .visible(attackEnabled::get)
-        .build());
-
-    private final Setting<List<Module>> attackDisable = sgAttack.add(new ModuleListSetting.Builder()
-        .name("disable")
-        .description("Modules to turn OFF when attacking an entity")
-        .visible(attackEnabled::get)
-        .build());
-
-    // ── On Elytra ─────────────────────────────────────────────────────────────
-    private final SettingGroup sgElytra = settings.createGroup("On Elytra");
-
-    private final Setting<Boolean> elytraEnabled = sgElytra.add(new BoolSetting.Builder()
-        .name("enabled")
-        .defaultValue(true)
-        .build());
-
-    private final Setting<List<Module>> elytraEnable = sgElytra.add(new ModuleListSetting.Builder()
-        .name("enable")
-        .description("Modules to turn ON when starting to glide with an elytra")
-        .visible(elytraEnabled::get)
-        .build());
-
-    private final Setting<List<Module>> elytraDisable = sgElytra.add(new ModuleListSetting.Builder()
-        .name("disable")
-        .description("Modules to turn OFF when starting to glide with an elytra")
-        .visible(elytraEnabled::get)
-        .build());
+    private final Setting<ConditionalRuleList> conditionalRules = sgConditional.add(
+        new GenericSetting.Builder<ConditionalRuleList>()
+            .name("rules")
+            .description("Event-driven module toggles with optional timers and auto-revert")
+            .defaultValue(new ConditionalRuleList())
+            .build());
 
     // ── Smart Totem ───────────────────────────────────────────────────────────
     private final SettingGroup sgSmartTotem = settings.createGroup("Smart Totem");
@@ -132,7 +60,7 @@ public class AutoToggle extends Module {
         .name("health-threshold")
         .description("Enable FutureTotem when health drops at or below this value (half-hearts, 20 = full health)")
         .defaultValue(10)
-        .sliderRange(1,20)
+        .sliderRange(1, 20)
         .visible(smartTotem::get)
         .build());
 
@@ -146,14 +74,22 @@ public class AutoToggle extends Module {
         .name("fall-health-%")
         .description("Trigger when estimated fall damage exceeds this % of current HP + absorption (100 = only if lethal)")
         .defaultValue(90)
-        .sliderRange(1,100)
+        .sliderRange(1, 100)
         .visible(fallPrediction::get)
         .build());
 
     // ── State ─────────────────────────────────────────────────────────────────
 
-    private final Map<Module, Long>    disabledAt     = new HashMap<>();
-    private final Map<Module, Boolean> lastKnownState = new HashMap<>();
+    private final Map<Module, Boolean> lastKnownState  = new HashMap<>();
+    // Pending timed enables/disables from *_TEMPORARILY rule actions
+    private final Map<Module, Long>    pendingEnables  = new HashMap<>();
+    private final Map<Module, Long>    pendingDisables = new HashMap<>();
+    // Saved pre-rule target states for rules with revertOnTriggerOff, keyed by rule identity
+    private final Map<ConditionalRule, Map<Module, Boolean>> pendingReverts = new HashMap<>();
+
+    // Guard against re-entrant ActiveModulesChangedEvent fired by our own toggle() calls
+    private boolean processingModuleChange = false;
+
     private final BlockPos.Mutable scanPos = new BlockPos.Mutable();
 
     private boolean hadPlayer  = false;
@@ -168,95 +104,155 @@ public class AutoToggle extends Module {
 
     @Override
     public String getInfoString() {
-        if (!timerEnabled.get() || disabledAt.isEmpty()) return null;
-        return disabledAt.size() + " pending";
+        if (!showInfo.get()) return null;
+
+        int rules   = conditionalRules.get().rules.size();
+        int pending = pendingEnables.size() + pendingDisables.size() + pendingReverts.size();
+
+        if (shorthandInfo.get()) return rules + "|" + pending;
+
+        String info = rules + (rules == 1 ? " rule" : " rules");
+        if (pending > 0) info += " | " + pending + " pending";
+        return info;
     }
 
     @Override
     public void onActivate() {
-        disabledAt.clear();
         lastKnownState.clear();
+        pendingEnables.clear();
+        pendingDisables.clear();
+        pendingReverts.clear();
         hadPlayer  = mc.player != null;
         wasElytra  = mc.player != null && mc.player.isGliding();
         prevHealth = mc.player != null ? mc.player.getHealth() : -1f;
 
-        for (Module mod : timerModules.get()) {
-            lastKnownState.put(mod, mod.isActive());
-            if (!mod.isActive()) disabledAt.put(mod, System.currentTimeMillis());
+        // Seed MODULE_ON / MODULE_OFF trigger states
+        for (ConditionalRule rule : conditionalRules.get().rules) {
+            if (rule.triggerType != TriggerType.MODULE_ON && rule.triggerType != TriggerType.MODULE_OFF) continue;
+            for (String id : rule.triggerModuleIds) {
+                Module m = Modules.get().get(id);
+                if (m != null) lastKnownState.putIfAbsent(m, m.isActive());
+            }
         }
     }
 
-    // ── Event: any module toggled — used only for timer tracking ──────────────
+    // ── Events ────────────────────────────────────────────────────────────────
 
     @EventHandler
     private void onActiveModulesChanged(ActiveModulesChangedEvent event) {
-        if (!timerEnabled.get()) return;
-        for (Module mod : timerModules.get()) {
-            boolean now  = mod.isActive();
-            Boolean prev = lastKnownState.get(mod);
-            if (prev == null) {
-                lastKnownState.put(mod, now);
-                continue;
-            }
-            if (prev && !now) {
-                disabledAt.put(mod, System.currentTimeMillis());
-            } else if (!prev && now) {
-                disabledAt.remove(mod);
-            }
-            lastKnownState.put(mod, now);
+        if (processingModuleChange) return;
+        processingModuleChange = true;
+        try {
+            handleModuleChange();
+        } finally {
+            processingModuleChange = false;
         }
     }
 
-    // ── Event: attack ─────────────────────────────────────────────────────────
+    private void handleModuleChange() {
+        List<ConditionalRule> rules = conditionalRules.get().rules;
 
-    @EventHandler
-    private void onAttackEntity(AttackEntityEvent event) {
-        if (!attackEnabled.get()) return;
-        enableList(attackEnable.get());
-        disableList(attackDisable.get());
-    }
+        // Build trigger cache for MODULE_ON/OFF rules; detect rising and falling edges.
+        // Each unique ID is resolved and state-tracked exactly once to prevent duplicate
+        // firings when multiple rules share a trigger module.
+        Map<String, Module> triggerCache  = new HashMap<>();
+        Set<Module> justActivated   = new HashSet<>();
+        Set<Module> justDeactivated = new HashSet<>();
 
-    // ── Tick ──────────────────────────────────────────────────────────────────
-
-    @EventHandler
-    private void onTick(TickEvent.Pre event) {
-
-        // Login detection
-        boolean hasPlayer = mc.player != null;
-        if (!hadPlayer && hasPlayer && loginEnabled.get()) {
-            enableList(loginEnable.get());
-            disableList(loginDisable.get());
+        for (ConditionalRule rule : rules) {
+            if (rule.triggerType != TriggerType.MODULE_ON && rule.triggerType != TriggerType.MODULE_OFF) continue;
+            for (String id : rule.triggerModuleIds) {
+                if (triggerCache.containsKey(id)) continue;
+                Module trigger = Modules.get().get(id);
+                triggerCache.put(id, trigger);
+                if (trigger == null) continue;
+                boolean now  = trigger.isActive();
+                Boolean prev = lastKnownState.get(trigger);
+                lastKnownState.put(trigger, now);
+                if (prev == null) continue;
+                if ( now && !prev) justActivated.add(trigger);
+                if (!now &&  prev) justDeactivated.add(trigger);
+            }
         }
-        hadPlayer = hasPlayer;
 
-        if (mc.player == null) return;
-
-        // Timer
-        if (timerEnabled.get() && !timerModules.get().isEmpty()) {
-            long threshold = (long) timerDelay.get() * 1000L;
-            long now = System.currentTimeMillis();
-            for (Module mod : timerModules.get()) {
-                if (!mod.isActive()) {
-                    Long t = disabledAt.get(mod);
-                    if (t != null && now - t >= threshold) enable(mod);
+        // Fire MODULE_ON rules on rising edge; MODULE_OFF rules on falling edge
+        if (!justActivated.isEmpty() || !justDeactivated.isEmpty()) {
+            for (ConditionalRule rule : rules) {
+                Set<Module> edge = rule.triggerType == TriggerType.MODULE_ON  ? justActivated
+                                 : rule.triggerType == TriggerType.MODULE_OFF ? justDeactivated
+                                 : null;
+                if (edge == null || edge.isEmpty()) continue;
+                boolean shouldFire = rule.triggerModuleIds.stream()
+                    .map(triggerCache::get)
+                    .anyMatch(edge::contains);
+                if (!shouldFire) continue;
+                for (String targetId : rule.targetModuleIds) {
+                    Module target = Modules.get().get(targetId);
+                    if (target != null) applyRule(rule, target);
                 }
             }
         }
 
-        // Elytra (edge: glide start)
-        boolean elytra = mc.player.isGliding();
-        if (elytraEnabled.get() && elytra && !wasElytra) {
-            enableList(elytraEnable.get());
-            disableList(elytraDisable.get());
+        // Revert: MODULE_ON rule reverts when no trigger is active anymore;
+        //         MODULE_OFF rule reverts when any trigger becomes active again.
+        if (!pendingReverts.isEmpty()) {
+            pendingReverts.entrySet().removeIf(entry -> {
+                ConditionalRule rule = entry.getKey();
+                boolean shouldRevert;
+                if (rule.triggerType == TriggerType.MODULE_ON) {
+                    shouldRevert = rule.triggerModuleIds.stream()
+                        .map(triggerCache::get).filter(m -> m != null).noneMatch(Module::isActive);
+                } else {
+                    shouldRevert = rule.triggerModuleIds.stream()
+                        .map(triggerCache::get).filter(m -> m != null).anyMatch(Module::isActive);
+                }
+                if (shouldRevert)
+                    for (Map.Entry<Module, Boolean> r : entry.getValue().entrySet())
+                        restoreState(r.getKey(), r.getValue());
+                return shouldRevert;
+            });
         }
+    }
+
+    @EventHandler
+    private void onAttackEntity(AttackEntityEvent event) {
+        fireRules(TriggerType.ON_ATTACK);
+    }
+
+    @EventHandler
+    private void onTick(TickEvent.Pre event) {
+        // Login detection
+        boolean hasPlayer = mc.player != null;
+        if (!hadPlayer && hasPlayer) fireRules(TriggerType.ON_LOGIN);
+        hadPlayer = hasPlayer;
+
+        if (mc.player == null) return;
+
+        // Timed enables/disables from *_TEMPORARILY actions
+        if (!pendingEnables.isEmpty() || !pendingDisables.isEmpty()) {
+            long now = System.currentTimeMillis();
+            pendingEnables.entrySet().removeIf(entry -> {
+                if (now >= entry.getValue()) { enable(entry.getKey()); return true; }
+                return false;
+            });
+            pendingDisables.entrySet().removeIf(entry -> {
+                if (now >= entry.getValue()) {
+                    Module m = entry.getKey();
+                    if (m.isActive()) m.toggle();
+                    return true;
+                }
+                return false;
+            });
+        }
+
+        // Elytra (rising edge: glide start)
+        boolean elytra = mc.player.isGliding();
+        if (elytra && !wasElytra) fireRules(TriggerType.ON_ELYTRA);
         wasElytra = elytra;
 
         // Damage
         float health = mc.player.getHealth();
-        if (damageEnabled.get() && prevHealth >= 0f && health < prevHealth) {
-            enableList(damageEnable.get());
-            disableList(damageDisable.get());
-        }
+        if (prevHealth >= 0f && health < prevHealth) fireRules(TriggerType.ON_DAMAGE);
         prevHealth = health;
 
         // Smart Totem: health threshold and fall prediction
@@ -269,7 +265,52 @@ public class AutoToggle extends Module {
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private void fireRules(TriggerType type) {
+        for (ConditionalRule rule : conditionalRules.get().rules) {
+            if (rule.triggerType != type) continue;
+            for (String targetId : rule.targetModuleIds) {
+                Module target = Modules.get().get(targetId);
+                if (target != null) applyRule(rule, target);
+            }
+        }
+    }
+
+    private void applyRule(ConditionalRule rule, Module target) {
+        // Snapshot state before acting so revert can restore it.
+        // putIfAbsent preserves the original snapshot if the rule fires more than once.
+        if (rule.revertOnTriggerOff)
+            pendingReverts.computeIfAbsent(rule, k -> new HashMap<>()).putIfAbsent(target, target.isActive());
+
+        switch (rule.action) {
+            case ENABLE -> enable(target);
+            case DISABLE -> {
+                if (target.isActive()) {
+                    target.toggle();
+                    lastKnownState.put(target, false);
+                }
+            }
+            case DISABLE_TEMPORARILY -> {
+                if (target.isActive()) target.toggle();
+                if (rule.turnBackAfterSec > 0)
+                    pendingEnables.put(target, System.currentTimeMillis() + (long) rule.turnBackAfterSec * 1000L);
+            }
+            case ENABLE_TEMPORARILY -> {
+                enable(target);
+                if (rule.turnBackAfterSec > 0)
+                    pendingDisables.put(target, System.currentTimeMillis() + (long) rule.turnBackAfterSec * 1000L);
+            }
+        }
+    }
+
+    private void restoreState(Module mod, boolean wasActive) {
+        if (wasActive && !mod.isActive()) enable(mod); // enable() updates lastKnownState
+        else if (!wasActive && mod.isActive()) {
+            mod.toggle();
+            lastKnownState.put(mod, false);
+        }
+    }
 
     private boolean isLethalFallPredicted() {
         if (mc.player == null || mc.world == null) return false;
@@ -277,7 +318,7 @@ public class AutoToggle extends Module {
         if (mc.player.isTouchingWater() || mc.player.isInLava()) return false;
         if (mc.player.getAbilities().flying) return false;
         if (mc.player.isGliding()) return false;
-        if (mc.player.getVelocity().y >= 0) return false; // going up or stationary
+        if (mc.player.getVelocity().y >= 0) return false;
         if (mc.player.hasStatusEffect(StatusEffects.SLOW_FALLING)) return false;
         if (mc.player.hasStatusEffect(StatusEffects.LEVITATION)) return false;
 
@@ -285,40 +326,28 @@ public class AutoToggle extends Module {
         if (airBelow == 0) return false;
 
         float totalFallDist = mc.player.fallDistance + airBelow;
-        float rawDamage = Math.max(0, totalFallDist - 3); // 3-block safe fall
+        float rawDamage = Math.max(0, totalFallDist - 3);
         if (rawDamage <= 0) return false;
 
         float effectiveHP = mc.player.getHealth() + mc.player.getAbsorptionAmount();
         return rawDamage >= effectiveHP * (fallHealthPercent.get() / 100.0f);
     }
 
-    /** Count consecutive air blocks directly below the player's feet. Stops at the first non-air block. */
     private int airBlocksBelow() {
         int x = mc.player.getBlockX();
         int z = mc.player.getBlockZ();
-        int startY = mc.player.getBlockPos().getY(); // block at player feet
+        int startY = mc.player.getBlockPos().getY();
         int minY = mc.world.getBottomY();
         for (int y = startY; y >= minY; y--) {
             scanPos.set(x, y, z);
             if (!mc.world.getBlockState(scanPos).isAir()) return startY - y;
         }
-        return startY - minY; // all air to world bottom (void)
-    }
-
-    private void enableList(List<Module> list) {
-        for (Module mod : list) enable(mod);
-    }
-
-    private void disableList(List<Module> list) {
-        for (Module mod : list) {
-            if (mod.isActive()) mod.toggle();
-        }
+        return startY - minY;
     }
 
     private void enable(Module mod) {
         if (!mod.isActive()) {
             mod.toggle();
-            disabledAt.remove(mod);
             lastKnownState.put(mod, true);
         }
     }

@@ -10,44 +10,31 @@ import meteordevelopment.meteorclient.events.world.TickEvent;
 import net.minecraft.util.math.Vec3d;
 import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.meteorclient.systems.modules.Module;
-import meteordevelopment.meteorclient.systems.modules.Modules;
 import java.util.Optional;
-import meteordevelopment.meteorclient.systems.modules.combat.AutoArmor;
-import meteordevelopment.meteorclient.systems.modules.combat.AutoTotem;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.client.gui.screen.ingame.HandledScreen;
 import net.minecraft.client.gui.screen.ingame.InventoryScreen;
 import net.minecraft.client.network.ClientPlayerEntity;
+import net.minecraft.component.DataComponentTypes;
+import net.minecraft.component.type.ContainerComponent;
 import net.minecraft.enchantment.Enchantment;
+import net.minecraft.enchantment.EnchantmentHelper;
+import net.minecraft.item.ItemStack;
 import net.minecraft.registry.entry.RegistryEntry;
+import net.minecraft.registry.tag.ItemTags;
 import net.minecraft.screen.slot.Slot;
 
 import java.util.List;
+import java.util.function.Predicate;
 
 public class AutoMend extends Module {
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
 
-    private boolean autoTotemWasOn = false;
-    private boolean futureTotemWasOn = false;
-    private boolean autoArmorWasOn = false;
-
     private final Setting<Boolean> offhandToo = sgGeneral.add(new BoolSetting.Builder()
             .name("use-offhand")
-            .description("Puts the second-most damaged mending piece in offhand (temporarily disables AutoTotem and FutureTotem)")
+            .description("Puts the second-most damaged mending piece in offhand")
             .defaultValue(false)
-            .onChanged(enabled -> {
-                if (!isActive()) return;
-                AutoTotem autoTotem = Modules.get().get(AutoTotem.class);
-                FutureTotem futureTotem = Modules.get().get(FutureTotem.class);
-                if (enabled) {
-                    if (autoTotem != null && autoTotem.isActive()) { autoTotem.toggle(); autoTotemWasOn = true; }
-                    if (futureTotem != null && futureTotem.isActive()) { futureTotem.toggle(); futureTotemWasOn = true; }
-                } else {
-                    if (autoTotemWasOn && autoTotem != null) { if (!autoTotem.isActive()) autoTotem.toggle(); autoTotemWasOn = false; }
-                    if (futureTotemWasOn && futureTotem != null) { if (!futureTotem.isActive()) futureTotem.toggle(); futureTotemWasOn = false; }
-                }
-            })
             .build());
 
     private final Setting<Boolean> prioritizeTools = sgGeneral.add(new BoolSetting.Builder()
@@ -99,13 +86,6 @@ public class AutoMend extends Module {
                     .defaultValue(ShulkerRefillHandler.BreakTool.BEST_PICKAXE)
                     .visible(() -> BARITONE_PRESENT)
                     .build());
-
-    private final Setting<Boolean> restoreInventory = sgShulker.add(new BoolSetting.Builder()
-            .name("restore-inventory")
-            .description("Return items taken from shulkers back to a shulker when the session ends")
-            .defaultValue(true)
-            .visible(() -> BARITONE_PRESENT)
-            .build());
 
     private final Setting<Boolean> autoDisable = sgShulker.add(new BoolSetting.Builder()
             .name("auto-disable")
@@ -193,18 +173,6 @@ public class AutoMend extends Module {
         dispatcher.clear();
         if (refillHandler != null) refillHandler.reset();
 
-        AutoArmor autoArmor = Modules.get().get(AutoArmor.class);
-        if (autoArmor != null && autoArmor.isActive()) { autoArmor.toggle(); autoArmorWasOn = true; }
-
-        if (offhandToo.get()) {
-            AutoTotem autoTotem = Modules.get().get(AutoTotem.class);
-            if (autoTotem != null && autoTotem.isActive()) { autoTotem.toggle(); autoTotemWasOn = true; }
-            FutureTotem futureTotem = Modules.get().get(FutureTotem.class);
-            if (futureTotem != null && futureTotem.isActive()) {
-                futureTotem.toggle();
-                futureTotemWasOn = true;
-            }
-        }
     }
 
     @Override
@@ -214,12 +182,6 @@ public class AutoMend extends Module {
         cameraLocked = false;
         resumeRusherAura();
         prevRefillActive = false;
-        restoreModule(Modules.get().get(AutoTotem.class), autoTotemWasOn);
-        autoTotemWasOn = false;
-        restoreModule(Modules.get().get(FutureTotem.class), futureTotemWasOn);
-        futureTotemWasOn = false;
-        restoreModule(Modules.get().get(AutoArmor.class), autoArmorWasOn);
-        autoArmorWasOn = false;
     }
 
     @EventHandler
@@ -241,8 +203,20 @@ public class AutoMend extends Module {
             if (isExternalContainerOpen()) refillHandler.drainTransfer();
 
             refillHandler.setLogger(debug.get() ? this::info : NOOP);
+            RegistryEntry<Enchantment> mending = MendingScanner.resolveMending(mc.world);
+            Predicate<ItemStack> itemFilter    = stack -> isDamagedMending(mending, stack);
+            Predicate<ItemStack> shulkerMatcher = stack -> {
+                if (!stack.isIn(ItemTags.SHULKER_BOXES)) return false;
+                ContainerComponent c = stack.get(DataComponentTypes.CONTAINER);
+                return c != null && c.streamNonEmpty().anyMatch(itemFilter);
+            };
             boolean refillActive = refillHandler.tick(
-                player, dispatcher, refillThreshold.get(), breakTool.get(), restoreInventory.get());
+                player,
+                dispatcher,
+                () -> countDamagedMendingItems(player, mending) < refillThreshold.get(),
+                shulkerMatcher,
+                itemFilter,
+                breakTool.get());
 
             if (refillActive && !prevRefillActive) pauseRusherAura();
             else if (!refillActive && prevRefillActive) resumeRusherAura();
@@ -302,6 +276,21 @@ public class AutoMend extends Module {
         if (!dispatcher.isEmpty()) swapGraceUntil = System.currentTimeMillis() + SWAP_GRACE_MS;
     }
 
+    private static boolean isDamagedMending(RegistryEntry<Enchantment> mending, ItemStack stack) {
+        return stack.isDamageable() && stack.getDamage() > 0
+               && EnchantmentHelper.getLevel(mending, stack) > 0;
+    }
+
+    private static int countDamagedMendingItems(ClientPlayerEntity player,
+                                                RegistryEntry<Enchantment> mending) {
+        int count = 0;
+        for (Slot s : player.playerScreenHandler.slots) {
+            if (s.id < 5 || s.id > 45) continue; // skip crafting slots; include armor/hotbar/offhand
+            if (isDamagedMending(mending, s.getStack())) count++;
+        }
+        return count;
+    }
+
     private void runSwapper(ClientPlayerEntity player) {
         if (mc.world == null) return;
         RegistryEntry<Enchantment> mending = MendingScanner.resolveMending(mc.world);
@@ -312,7 +301,7 @@ public class AutoMend extends Module {
                      + (int) tools.stream().filter(s -> s.getStack().getDamage() > 0).count();
         Consumer<String> dbg = debug.get() ? this::info : NOOP;
 
-        repairHandler.handleArmor(player, pieces, announce.get(), dbg);
+        repairHandler.handleArmor(player, pieces, mending, announce.get(), dbg);
         if (!dispatcher.isEmpty()) {
             if (debug.get()) info("Armor swap queued");
             return; // Don't also queue an offhand swap this tick — wait for armor to settle
@@ -368,10 +357,6 @@ public class AutoMend extends Module {
 
     private boolean isExternalContainerOpen() {
         return mc.currentScreen instanceof HandledScreen && !(mc.currentScreen instanceof InventoryScreen);
-    }
-
-    private void restoreModule(Module module, boolean wasOn) {
-        if (wasOn && module != null && !module.isActive()) module.toggle();
     }
 
     private int inventoryHash(ClientPlayerEntity player) {
