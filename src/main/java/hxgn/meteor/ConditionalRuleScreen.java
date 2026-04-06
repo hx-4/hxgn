@@ -6,6 +6,7 @@ import hxgn.meteor.ConditionalRuleList.TriggerType;
 import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.WindowScreen;
 import meteordevelopment.meteorclient.gui.widgets.containers.WTable;
+import meteordevelopment.meteorclient.gui.widgets.containers.WView;
 import meteordevelopment.meteorclient.gui.widgets.input.WDropdown;
 import meteordevelopment.meteorclient.gui.widgets.input.WIntEdit;
 import meteordevelopment.meteorclient.gui.widgets.input.WTextBox;
@@ -46,18 +47,21 @@ public class ConditionalRuleScreen extends WindowScreen {
         WButton addBtn = add(theme.button("+ Add Rule")).expandX().widget();
         addBtn.action = () -> {
             data.rules.add(new ConditionalRule(
-                TriggerType.MODULE_ON, new ArrayList<>(), ActionType.DISABLE,
-                new ArrayList<>(), 0, false));
+                TriggerType.MODULE_ON, new ArrayList<>(), "", 0, "", 0,
+                ActionType.DISABLE, new ArrayList<>(), 0, false));
             mc.setScreen(new EditRuleScreen(theme, data, data.rules.size() - 1, this));
         };
     }
 
     private void populateTable(WTable table) {
-        table.add(theme.label("Trigger")).expandX();
-        table.add(theme.label("Action")).expandX();
-        table.add(theme.label("Targets")).expandX();
-        table.add(theme.label("Delay")).expandX();
-        table.add(theme.label("Revert")).expandX();
+        table.horizontalSpacing = 12;
+        table.verticalSpacing   = 6;
+
+        table.add(theme.label("Trigger")).expandX().padHorizontal(6).padVertical(4);
+        table.add(theme.label("Action")).expandX().padHorizontal(6).padVertical(4);
+        table.add(theme.label("Targets")).expandX().padHorizontal(6).padVertical(4);
+        table.add(theme.label("Delay")).expandX().padHorizontal(6).padVertical(4);
+        table.add(theme.label("Revert")).expandX().padHorizontal(6).padVertical(4);
         table.add(theme.label("")).widget();
         table.add(theme.label("")).widget();
         table.row();
@@ -69,12 +73,20 @@ public class ConditionalRuleScreen extends WindowScreen {
             boolean hasTriggerModules = rule.triggerType == TriggerType.MODULE_ON
                                      || rule.triggerType == TriggerType.MODULE_OFF;
 
-            String triggerLabel = hasTriggerModules
-                ? (rule.triggerModuleIds.isEmpty() ? "(none)"
-                   : rule.triggerModuleIds.size() == 1 ? moduleTitle(rule.triggerModuleIds.get(0))
-                   : rule.triggerModuleIds.size() + " modules")
-                + " · " + rule.triggerType.label
-                : rule.triggerType.label;
+            String triggerLabel;
+            if (hasTriggerModules) {
+                String mods = rule.triggerModuleIds.isEmpty() ? "(none)"
+                    : rule.triggerModuleIds.size() == 1 ? moduleTitle(rule.triggerModuleIds.get(0))
+                    : rule.triggerModuleIds.size() + " modules";
+                triggerLabel = mods + " · " + rule.triggerType.label;
+            } else if (rule.triggerType == TriggerType.ON_HEALTH_BELOW) {
+                triggerLabel = rule.triggerType.label + " " + rule.triggerThreshold;
+            } else if (rule.triggerType == TriggerType.ON_CHAT_CONTAINS) {
+                triggerLabel = rule.triggerText.isEmpty() ? rule.triggerType.label
+                    : rule.triggerType.label + ": \"" + rule.triggerText + "\"";
+            } else {
+                triggerLabel = rule.triggerType.label;
+            }
 
             String targetsLabel = rule.targetModuleIds.isEmpty() ? "(none)"
                 : rule.targetModuleIds.size() == 1
@@ -85,16 +97,16 @@ public class ConditionalRuleScreen extends WindowScreen {
                                 || rule.action == ActionType.ENABLE_TEMPORARILY)
                                && rule.turnBackAfterSec > 0;
 
-            table.add(theme.label(triggerLabel)).expandX();
-            table.add(theme.label(rule.action.label)).expandX();
-            table.add(theme.label(targetsLabel)).expandX();
-            table.add(theme.label(hasTurnBack ? rule.turnBackAfterSec + "s" : "—")).expandX();
-            table.add(theme.label(rule.revertOnTriggerOff ? "Yes" : "No")).expandX();
+            table.add(theme.label(triggerLabel).color(theme.textSecondaryColor())).expandX().padHorizontal(6).padVertical(4);
+            table.add(theme.label(rule.action.label).color(theme.textSecondaryColor())).expandX().padHorizontal(6).padVertical(4);
+            table.add(theme.label(targetsLabel).color(theme.textSecondaryColor())).expandX().padHorizontal(6).padVertical(4);
+            table.add(theme.label(hasTurnBack ? rule.turnBackAfterSec + "s" : "—").color(theme.textSecondaryColor())).expandX().padHorizontal(6).padVertical(4);
+            table.add(theme.label(rule.revertOnTriggerOff ? "Yes" : "No").color(theme.textSecondaryColor())).expandX().padHorizontal(6).padVertical(4);
 
-            WButton editBtn = table.add(theme.button("Edit")).widget();
+            WButton editBtn = table.add(theme.button("Edit")).padVertical(2).widget();
             editBtn.action = () -> mc.setScreen(new EditRuleScreen(theme, data, idx, this));
 
-            WButton removeBtn = table.add(theme.button("Remove")).widget();
+            WButton removeBtn = table.add(theme.button("Remove")).padVertical(2).widget();
             removeBtn.action = () -> { data.rules.remove(idx); reload(); };
 
             table.row();
@@ -111,6 +123,10 @@ public class ConditionalRuleScreen extends WindowScreen {
 
         private TriggerType        editType;
         private final List<String> editTriggerModules;
+        private String             editTriggerText;
+        private int                editTriggerThreshold;
+        private String             editTriggerResponse;
+        private int                editTriggerResponseTimeout;
         private ActionType         editAction;
         private final List<String> editTargetModules;
         private int                editTurnBack;
@@ -123,13 +139,17 @@ public class ConditionalRuleScreen extends WindowScreen {
             this.idx    = idx;
             this.parent = parent;
 
-            ConditionalRule r       = data.rules.get(idx);
-            this.editType           = r.triggerType;
-            this.editTriggerModules = new ArrayList<>(r.triggerModuleIds);
-            this.editAction         = r.action;
-            this.editTargetModules  = new ArrayList<>(r.targetModuleIds);
-            this.editTurnBack       = r.turnBackAfterSec;
-            this.editRevert         = r.revertOnTriggerOff;
+            ConditionalRule r             = data.rules.get(idx);
+            this.editType                 = r.triggerType;
+            this.editTriggerModules       = new ArrayList<>(r.triggerModuleIds);
+            this.editTriggerText          = r.triggerText;
+            this.editTriggerThreshold     = r.triggerThreshold;
+            this.editTriggerResponse      = r.triggerResponse;
+            this.editTriggerResponseTimeout = r.triggerResponseTimeout;
+            this.editAction               = r.action;
+            this.editTargetModules        = new ArrayList<>(r.targetModuleIds);
+            this.editTurnBack             = r.turnBackAfterSec;
+            this.editRevert               = r.revertOnTriggerOff;
         }
 
         @Override
@@ -148,6 +168,33 @@ public class ConditionalRuleScreen extends WindowScreen {
                                      || editType == TriggerType.MODULE_OFF;
             if (hasTriggerModules) {
                 addModuleSelector(form, "Trigger module(s):", editTriggerModules, "Select Trigger Modules");
+            }
+
+            if (editType == TriggerType.ON_CHAT_CONTAINS) {
+                form.add(theme.label("Keyword (case-insensitive):"));
+                WTextBox keywordBox = form.add(theme.textBox(editTriggerText)).minWidth(200).expandX().widget();
+                keywordBox.action = () -> editTriggerText = keywordBox.get();
+                form.row();
+
+                form.add(theme.label("Auto-response (leave blank to disable):"));
+                WTextBox responseBox = form.add(theme.textBox(editTriggerResponse)).minWidth(200).expandX().widget();
+                responseBox.action = () -> editTriggerResponse = responseBox.get();
+                form.row();
+
+                form.add(theme.label("Response timeout (s, 0 = unlimited):"));
+                WIntEdit timeoutEdit = form.add(
+                    theme.intEdit(editTriggerResponseTimeout, 0, 3600, true)).expandX().widget();
+                timeoutEdit.action = () -> editTriggerResponseTimeout = timeoutEdit.get();
+                form.row();
+            }
+
+            if (editType == TriggerType.ON_HEALTH_BELOW) {
+                form.add(theme.label("Threshold (half-hearts, 1–20):"));
+                WIntEdit threshEdit = form.add(
+                    theme.intEdit(editTriggerThreshold == 0 ? 10 : editTriggerThreshold, 1, 20, false))
+                    .expandX().widget();
+                threshEdit.action = () -> editTriggerThreshold = threshEdit.get();
+                form.row();
             }
 
             // Action
@@ -186,11 +233,16 @@ public class ConditionalRuleScreen extends WindowScreen {
                                   || editAction == ActionType.ENABLE_TEMPORARILY;
                 boolean needsRevert = editType == TriggerType.MODULE_ON
                                    || editType == TriggerType.MODULE_OFF;
+                boolean isChat = editType == TriggerType.ON_CHAT_CONTAINS;
                 data.rules.set(idx, new ConditionalRule(
-                    editType, editTriggerModules, editAction,
-                    editTargetModules,
-                    needsDelay   ? editTurnBack : 0,
-                    needsRevert  ? editRevert   : false));
+                    editType, editTriggerModules,
+                    isChat                               ? editTriggerText              : "",
+                    editType == TriggerType.ON_HEALTH_BELOW ? editTriggerThreshold      : 0,
+                    isChat                               ? editTriggerResponse          : "",
+                    isChat                               ? editTriggerResponseTimeout   : 0,
+                    editAction, editTargetModules,
+                    needsDelay  ? editTurnBack : 0,
+                    needsRevert ? editRevert   : false));
                 mc.setScreen(parent);
                 parent.reload();
             };
@@ -248,7 +300,9 @@ public class ConditionalRuleScreen extends WindowScreen {
             Set<String> selectedSet = new HashSet<>(selected);
 
             // Left — available (not yet selected)
-            WTable left = table.add(theme.table()).top().widget();
+            WView leftView = table.add(theme.view()).top().widget();
+            leftView.maxHeight = theme.scale(200);
+            WTable left = leftView.add(theme.table()).expandX().widget();
             for (Module m : all) {
                 if (selectedSet.contains(m.name)) continue;
                 if (!filterText.isEmpty() && !m.title.toLowerCase().contains(filterText)) continue;
@@ -260,7 +314,9 @@ public class ConditionalRuleScreen extends WindowScreen {
             if (!left.cells.isEmpty()) table.add(theme.verticalSeparator()).expandWidgetY();
 
             // Right — selected
-            WTable right = table.add(theme.table()).top().widget();
+            WView rightView = table.add(theme.view()).top().widget();
+            rightView.maxHeight = theme.scale(200);
+            WTable right = rightView.add(theme.table()).expandX().widget();
             for (Module m : all) {
                 if (!selectedSet.contains(m.name)) continue;
                 if (!filterText.isEmpty() && !m.title.toLowerCase().contains(filterText)) continue;

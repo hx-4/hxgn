@@ -32,12 +32,17 @@ public class ConditionalRuleList implements ICopyable<ConditionalRuleList>, ISer
     // ── Trigger types ─────────────────────────────────────────────────────────
 
     public enum TriggerType {
-        MODULE_ON  ("Module activated"),
-        MODULE_OFF ("Module deactivated"),
-        ON_LOGIN   ("On login"),
-        ON_DAMAGE  ("On damage"),
-        ON_ATTACK  ("On attack"),
-        ON_ELYTRA  ("On elytra start");
+        MODULE_ON      ("Module activated"),
+        MODULE_OFF     ("Module deactivated"),
+        ON_LOGIN       ("On login"),
+        ON_DAMAGE      ("On damage"),
+        ON_ATTACK      ("On attack"),
+        ON_ELYTRA      ("On elytra start"),
+        ON_SPRINT_START("On sprint start"),
+        ON_BREAK_BLOCK ("On block break"),
+        ON_DEATH       ("On death"),
+        ON_HEALTH_BELOW("Health below"),     // extra: triggerThreshold (half-hearts)
+        ON_CHAT_CONTAINS("Chat contains");   // extra: triggerText (keyword)
 
         public final String label;
         TriggerType(String label) { this.label = label; }
@@ -50,20 +55,30 @@ public class ConditionalRuleList implements ICopyable<ConditionalRuleList>, ISer
     public static final class ConditionalRule {
         public TriggerType   triggerType;
         public List<String>  triggerModuleIds; // MODULE_ON / MODULE_OFF only; any match fires
+        public String        triggerText;
+        public int           triggerThreshold;
+        public String        triggerResponse;
+        public int           triggerResponseTimeout;
         public ActionType    action;
         public List<String>  targetModuleIds;
         public int           turnBackAfterSec; // *_TEMPORARILY only; 0 = no timer
         public boolean       revertOnTriggerOff; // restore pre-rule state when trigger reverses
 
         public ConditionalRule(TriggerType triggerType, List<String> triggerModuleIds,
+                               String triggerText, int triggerThreshold,
+                               String triggerResponse, int triggerResponseTimeout,
                                ActionType action, List<String> targetModuleIds,
                                int turnBackAfterSec, boolean revertOnTriggerOff) {
-            this.triggerType        = triggerType;
-            this.triggerModuleIds   = new ArrayList<>(triggerModuleIds);
-            this.action             = action;
-            this.targetModuleIds    = new ArrayList<>(targetModuleIds);
-            this.turnBackAfterSec   = turnBackAfterSec;
-            this.revertOnTriggerOff = revertOnTriggerOff;
+            this.triggerType              = triggerType;
+            this.triggerModuleIds         = new ArrayList<>(triggerModuleIds);
+            this.triggerText              = triggerText != null ? triggerText : "";
+            this.triggerThreshold         = triggerThreshold;
+            this.triggerResponse          = triggerResponse != null ? triggerResponse : "";
+            this.triggerResponseTimeout   = triggerResponseTimeout;
+            this.action                   = action;
+            this.targetModuleIds          = new ArrayList<>(targetModuleIds);
+            this.turnBackAfterSec         = turnBackAfterSec;
+            this.revertOnTriggerOff       = revertOnTriggerOff;
         }
 
         public NbtCompound toNbt() {
@@ -72,6 +87,10 @@ public class ConditionalRuleList implements ICopyable<ConditionalRuleList>, ISer
             NbtList triggers = new NbtList();
             for (String id : triggerModuleIds) triggers.add(NbtString.of(id));
             tag.put("triggerModules", triggers);
+            tag.putString("triggerText", triggerText);
+            tag.putInt("triggerThreshold", triggerThreshold);
+            tag.putString("triggerResponse", triggerResponse);
+            tag.putInt("triggerResponseTimeout", triggerResponseTimeout);
             tag.putString("action", action.name());
             NbtList targets = new NbtList();
             for (String id : targetModuleIds) targets.add(NbtString.of(id));
@@ -111,7 +130,10 @@ public class ConditionalRuleList implements ICopyable<ConditionalRuleList>, ISer
                 if (!old.isEmpty()) targets.add(old);
             }
 
-            return new ConditionalRule(type, triggers, action, targets,
+            return new ConditionalRule(type, triggers,
+                tag.getString("triggerText"), tag.getInt("triggerThreshold"),
+                tag.getString("triggerResponse"), tag.getInt("triggerResponseTimeout"),
+                action, targets,
                 tag.getInt("turnBack"), tag.getBoolean("revert"));
         }
     }
@@ -127,6 +149,8 @@ public class ConditionalRuleList implements ICopyable<ConditionalRuleList>, ISer
         rules.clear();
         for (ConditionalRule r : other.rules) {
             rules.add(new ConditionalRule(r.triggerType, r.triggerModuleIds,
+                r.triggerText, r.triggerThreshold,
+                r.triggerResponse, r.triggerResponseTimeout,
                 r.action, r.targetModuleIds, r.turnBackAfterSec, r.revertOnTriggerOff));
         }
         return this;
