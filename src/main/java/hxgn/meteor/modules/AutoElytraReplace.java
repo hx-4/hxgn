@@ -56,7 +56,7 @@ public class AutoElytraReplace extends Module {
         if (mc.player == null) return null;
         int count = 0;
         for (Slot slot : mc.player.playerScreenHandler.slots) {
-            if (slot.getStack().getItem() == Items.ELYTRA) count++;
+            if (slot.getStack().getItem() == Items.ELYTRA && slot.getStack().getDamage() < threshold.get()) count++;
         }
         return String.valueOf(count);
     }
