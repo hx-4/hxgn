@@ -121,7 +121,20 @@ public class AutoToggle extends Module {
         if (shorthandInfo.get()) return rules + "|" + pending;
 
         String info = rules + (rules == 1 ? " rule" : " rules");
-        if (pending > 0) info += " | " + pending + " pending";
+        if (pending == 1) {
+            long fireAt = -1;
+            if (!pendingEnables.isEmpty())  fireAt = pendingEnables.values().iterator().next();
+            else if (!pendingDisables.isEmpty()) fireAt = pendingDisables.values().iterator().next();
+
+            if (fireAt > 0) {
+                double secsLeft = Math.max(0, (fireAt - System.currentTimeMillis()) / 1000.0);
+                info += String.format(" | %.1fs", secsLeft);
+            } else {
+                info += " | 1 pending";
+            }
+        } else if (pending > 1) {
+            info += " | " + pending + " pending";
+        }
         return info;
     }
 
