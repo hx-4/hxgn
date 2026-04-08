@@ -3,10 +3,13 @@ package hxgn.meteor.modules;
 import hxgn.meteor.ConditionalRuleList;
 import hxgn.meteor.ConditionalRuleList.ActionType;
 import hxgn.meteor.ConditionalRuleList.ConditionalRule;
+import hxgn.meteor.ConditionalRuleList.TriggerMode;
 import hxgn.meteor.ConditionalRuleList.TriggerType;
+import hxgn.meteor.ConditionalRuleList.YMode;
 import hxgn.meteor.HxgnAddon;
 import meteordevelopment.meteorclient.events.entity.player.AttackEntityEvent;
 import meteordevelopment.meteorclient.events.entity.player.BreakBlockEvent;
+import meteordevelopment.meteorclient.events.entity.player.PlaceBlockEvent;
 import meteordevelopment.meteorclient.events.game.GameJoinedEvent;
 import meteordevelopment.meteorclient.events.game.ReceiveMessageEvent;
 import meteordevelopment.meteorclient.events.meteor.ActiveModulesChangedEvent;
@@ -17,6 +20,7 @@ import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.meteorclient.utils.player.ChatUtils;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.entity.effect.StatusEffects;
+import net.minecraft.registry.Registries;
 import net.minecraft.util.math.BlockPos;
 
 import java.util.HashMap;
@@ -85,7 +89,7 @@ public class AutoToggle extends Module {
     // ── State ─────────────────────────────────────────────────────────────────
 
     private final Map<Module, Boolean> lastKnownState  = new HashMap<>();
-    // Pending timed enables/disables from *_TEMPORARILY rule actions
+    // Pending timed enables/disables from *_TEMPORARILY / RE_*_SELF_AFTER actions
     private final Map<Module, Long>    pendingEnables  = new HashMap<>();
     private final Map<Module, Long>    pendingDisables = new HashMap<>();
     // Saved pre-rule target states for rules with revertOnTriggerOff, keyed by rule identity
@@ -96,14 +100,20 @@ public class AutoToggle extends Module {
 
     private final BlockPos.Mutable scanPos = new BlockPos.Mutable();
 
-    private boolean wasElytra    = false;
-    private boolean wasSprinting = false;
-    private boolean wasDead      = false;
+    private boolean prevElytra    = false;
+    private boolean prevSprinting = false;
+    private boolean prevDead      = false;
     private float   prevHealth   = -1f;
-    // Tracks which ON_HEALTH_BELOW rules are "armed" (health was above threshold, waiting to cross down)
-    private final Set<ConditionalRule> healthThresholdArmed = new HashSet<>();
+
+    // Edge-trigger armed sets: rule is "armed" when on the safe side of the threshold,
+    // fires once when it crosses to the trigger side.
+    private final Set<ConditionalRule> healthArmed = new HashSet<>();
+    private final Set<ConditionalRule> hungerArmed = new HashSet<>();
+    private final Set<ConditionalRule> yArmed      = new HashSet<>();
+
     // Per-rule timestamp of the last auto-response sent (for ON_CHAT_CONTAINS timeout)
     private final Map<ConditionalRule, Long> lastResponseSent = new HashMap<>();
+    private String prevDimension = null;
 
     public AutoToggle() {
         super(HxgnAddon.CATEGORY, "auto-toggle",
@@ -123,7 +133,7 @@ public class AutoToggle extends Module {
         String info = rules + (rules == 1 ? " rule" : " rules");
         if (pending == 1) {
             long fireAt = -1;
-            if (!pendingEnables.isEmpty())  fireAt = pendingEnables.values().iterator().next();
+            if (!pendingEnables.isEmpty())       fireAt = pendingEnables.values().iterator().next();
             else if (!pendingDisables.isEmpty()) fireAt = pendingDisables.values().iterator().next();
 
             if (fireAt > 0) {
@@ -144,11 +154,14 @@ public class AutoToggle extends Module {
         pendingEnables.clear();
         pendingDisables.clear();
         pendingReverts.clear();
-        healthThresholdArmed.clear();
+        healthArmed.clear();
+        hungerArmed.clear();
+        yArmed.clear();
         lastResponseSent.clear();
-        wasElytra    = mc.player != null && mc.player.isGliding();
-        wasSprinting = mc.player != null && mc.player.isSprinting();
-        wasDead      = mc.player != null && mc.player.getHealth() <= 0;
+        prevDimension = mc.world != null ? mc.world.getRegistryKey().getValue().toString() : null;
+        prevElytra    = mc.player != null && mc.player.isGliding();
+        prevSprinting = mc.player != null && mc.player.isSprinting();
+        prevDead      = mc.player != null && mc.player.getHealth() <= 0;
         prevHealth   = mc.player != null ? mc.player.getHealth() : -1f;
 
         // Seed MODULE_ON / MODULE_OFF trigger states
@@ -238,12 +251,27 @@ public class AutoToggle extends Module {
 
     @EventHandler
     private void onAttackEntity(AttackEntityEvent event) {
-        fireRules(TriggerType.ON_ATTACK);
+        fireRules(TriggerType.ON_ATTACK, null);
     }
 
     @EventHandler
     private void onBreakBlock(BreakBlockEvent event) {
-        fireRules(TriggerType.ON_BREAK_BLOCK);
+        if (mc.world == null) return;
+        String blockId = Registries.BLOCK.getId(mc.world.getBlockState(event.blockPos).getBlock()).toString();
+        handleBlockEvent(TriggerMode.BREAK, blockId);
+    }
+
+    @EventHandler
+    private void onPlaceBlock(PlaceBlockEvent event) {
+        handleBlockEvent(TriggerMode.PLACE, Registries.BLOCK.getId(event.block).toString());
+    }
+
+    private void handleBlockEvent(TriggerMode mode, String blockId) {
+        for (ConditionalRule rule : conditionalRules.get().rules) {
+            if (rule.triggerType != TriggerType.ON_BLOCK || rule.triggerMode != mode) continue;
+            if (!rule.triggerText.isEmpty() && !blockId.contains(rule.triggerText.toLowerCase())) continue;
+            applyRuleToTargets(rule);
+        }
     }
 
     @EventHandler
@@ -269,14 +297,22 @@ public class AutoToggle extends Module {
 
     @EventHandler
     private void onGameJoined(GameJoinedEvent event) {
-        fireRules(TriggerType.ON_LOGIN);
+        fireRules(TriggerType.ON_LOGIN, null);
     }
 
     @EventHandler
     private void onTick(TickEvent.Pre event) {
         if (mc.player == null) return;
+        List<ConditionalRule> rules = conditionalRules.get().rules;
 
-        // Timed enables/disables from *_TEMPORARILY actions
+        // Drop stale references left by rule edits (rule objects replaced when saved)
+        healthArmed.retainAll(rules);
+        hungerArmed.retainAll(rules);
+        yArmed.retainAll(rules);
+        lastResponseSent.keySet().retainAll(rules);
+        pendingReverts.keySet().retainAll(rules);
+
+        // Timed enables/disables from *_TEMPORARILY and RE_*_SELF_AFTER actions
         if (!pendingEnables.isEmpty() || !pendingDisables.isEmpty()) {
             long now = System.currentTimeMillis();
             pendingEnables.entrySet().removeIf(entry -> {
@@ -293,36 +329,54 @@ public class AutoToggle extends Module {
             });
         }
 
-        // Elytra (rising edge: glide start)
-        boolean elytra = mc.player.isGliding();
-        if (elytra && !wasElytra) fireRules(TriggerType.ON_ELYTRA);
-        wasElytra = elytra;
+        double y = mc.player.getY();
 
-        // Sprint (rising edge)
+        // Elytra (start / stop edges, both support optional altitude filter)
+        boolean elytra = mc.player.isGliding();
+        if (elytra != prevElytra) {
+            TriggerMode edgeMode = elytra ? TriggerMode.START : TriggerMode.STOP;
+            for (ConditionalRule rule : rules) {
+                if (rule.triggerType != TriggerType.ON_ELYTRA || rule.triggerMode != edgeMode) continue;
+                if (!checkYMode(rule, y)) continue;
+                applyRuleToTargets(rule);
+            }
+        }
+        prevElytra = elytra;
+
+        // Sprint (start / stop edges)
         boolean sprinting = mc.player.isSprinting();
-        if (sprinting && !wasSprinting) fireRules(TriggerType.ON_SPRINT_START);
-        wasSprinting = sprinting;
+        if (sprinting != prevSprinting)
+            fireRules(TriggerType.ON_SPRINT, sprinting ? TriggerMode.START : TriggerMode.STOP);
+        prevSprinting = sprinting;
 
         float health = mc.player.getHealth();
 
-        // Death (rising edge: health hits 0)
+        // Death / Respawn
         boolean dead = health <= 0;
-        if (dead && !wasDead) fireRules(TriggerType.ON_DEATH);
-        wasDead = dead;
+        if (dead  && !prevDead) fireRules(TriggerType.ON_DEATH, TriggerMode.DIE);
+        if (!dead && prevDead)  fireRules(TriggerType.ON_DEATH, TriggerMode.RESPAWN);
+        prevDead = dead;
 
         // Damage
-        if (prevHealth >= 0f && health < prevHealth) fireRules(TriggerType.ON_DAMAGE);
+        if (prevHealth >= 0f && health < prevHealth) fireRules(TriggerType.ON_DAMAGE, null);
         prevHealth = health;
 
-        // Health below threshold — edge-triggered per rule:
-        // arms when health rises above threshold, fires once when it drops back to/below it
-        for (ConditionalRule rule : conditionalRules.get().rules) {
-            if (rule.triggerType != TriggerType.ON_HEALTH_BELOW) continue;
-            if (health > rule.triggerThreshold) {
-                healthThresholdArmed.add(rule);
-            } else if (healthThresholdArmed.remove(rule)) {
-                applyRuleToTargets(rule);
+        // Health / Hunger / Y threshold (edge-triggered per rule; mode selects BELOW or ABOVE)
+        applyThresholdTrigger(rules, TriggerType.ON_HEALTH, health, healthArmed);
+        applyThresholdTrigger(rules, TriggerType.ON_HUNGER, mc.player.getHungerManager().getFoodLevel(), hungerArmed);
+        applyThresholdTrigger(rules, TriggerType.ON_Y, y, yArmed);
+
+        // Dimension change
+        if (mc.world != null) {
+            String dim = mc.world.getRegistryKey().getValue().toString();
+            if (prevDimension != null && !dim.equals(prevDimension)) {
+                for (ConditionalRule rule : rules) {
+                    if (rule.triggerType != TriggerType.ON_DIMENSION_CHANGE) continue;
+                    if (!rule.triggerText.isEmpty() && !rule.triggerText.equals(dim)) continue;
+                    applyRuleToTargets(rule);
+                }
             }
+            prevDimension = dim;
         }
 
         // Smart Totem: health threshold and fall prediction
@@ -338,16 +392,31 @@ public class AutoToggle extends Module {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private void applyRuleToTargets(ConditionalRule rule) {
-        for (String targetId : rule.targetModuleIds) {
+        boolean isSelf = rule.action == ActionType.RE_ENABLE_SELF_AFTER
+                      || rule.action == ActionType.RE_DISABLE_SELF_AFTER;
+        List<String> ids = isSelf ? rule.triggerModuleIds : rule.targetModuleIds;
+        for (String targetId : ids) {
             Module target = Modules.get().get(targetId);
             if (target != null) applyRule(rule, target);
         }
     }
 
-    private void fireRules(TriggerType type) {
+    private void fireRules(TriggerType type, TriggerMode mode) {
         for (ConditionalRule rule : conditionalRules.get().rules) {
             if (rule.triggerType != type) continue;
+            if (mode != null && rule.triggerMode != mode) continue;
             applyRuleToTargets(rule);
+        }
+    }
+
+    private void applyThresholdTrigger(List<ConditionalRule> rules, TriggerType type, double value,
+                                       Set<ConditionalRule> armedSet) {
+        for (ConditionalRule rule : rules) {
+            if (rule.triggerType != type) continue;
+            boolean shouldArm = rule.triggerMode == TriggerMode.BELOW
+                ? value > rule.triggerThreshold : value < rule.triggerThreshold;
+            if (shouldArm) armedSet.add(rule);
+            else if (armedSet.remove(rule)) applyRuleToTargets(rule);
         }
     }
 
@@ -375,6 +444,14 @@ public class AutoToggle extends Module {
                 if (rule.turnBackAfterSec > 0)
                     pendingDisables.put(target, System.currentTimeMillis() + (long) rule.turnBackAfterSec * 1000L);
             }
+            case RE_ENABLE_SELF_AFTER -> {
+                if (rule.turnBackAfterSec > 0)
+                    pendingEnables.put(target, System.currentTimeMillis() + (long) rule.turnBackAfterSec * 1000L);
+            }
+            case RE_DISABLE_SELF_AFTER -> {
+                if (rule.turnBackAfterSec > 0)
+                    pendingDisables.put(target, System.currentTimeMillis() + (long) rule.turnBackAfterSec * 1000L);
+            }
         }
     }
 
@@ -384,6 +461,12 @@ public class AutoToggle extends Module {
             mod.toggle();
             lastKnownState.put(mod, false);
         }
+    }
+
+    private boolean checkYMode(ConditionalRule rule, double y) {
+        if (rule.triggerYMode == YMode.BELOW) return y < rule.triggerThreshold;
+        if (rule.triggerYMode == YMode.ABOVE) return y > rule.triggerThreshold;
+        return true;
     }
 
     private boolean isLethalFallPredicted() {
