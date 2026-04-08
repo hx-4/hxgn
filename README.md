@@ -7,7 +7,6 @@ It bundles a few features
 - [Meteor Client](https://meteorclient.com)
 - [Baritone](https://github.com/cabaletta/baritone) (required)
 
-
 Clever Mend   
 - Equips low-durability gear to automatically repair everything in your inventory
     - Optionally puts the second most damaged mending item in your offhand to repair two at once
@@ -28,6 +27,6 @@ Future Totem
 Auto Toggle
 - Toggles modules on and off automatically based on a customizable set of conditional _rules_
   -  You can create as many _rules_ as you want. Each _rule_ contains a:
-    - Trigger (module **activation**, **login**, **attacking**, etc) and an
+    - Trigger (module **activation**, **login**, **attacking**, many more) and an
     - Action (**enable** or **disable** a module _permanently_ or _temporarily_)
 - Smart Totem trigger (fall height prediction & health boundary)
