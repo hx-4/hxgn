@@ -377,10 +377,8 @@ public class AutoToggle extends Module {
         applyThresholdTrigger(rules, TriggerType.ON_HUNGER, mc.player.getHungerManager().getFoodLevel(), hungerArmed);
         applyThresholdTrigger(rules, TriggerType.ON_Y, y, yArmed);
 
-        // Height (fall distance; optional elytra-only filter)
-        boolean hasHeightRules = false;
-        for (ConditionalRule rule : rules) if (rule.triggerType == TriggerType.ON_HEIGHT) { hasHeightRules = true; break; }
-        if (hasHeightRules) applyHeightTrigger(rules, mc.player.fallDistance, elytra, heightArmed);
+        // Height trigger (edge-triggered; optional elytra-only guard; supports revert)
+        applyHeightTrigger(rules, y, elytra, heightArmed);
 
         // Dimension change
         if (mc.world != null) {
