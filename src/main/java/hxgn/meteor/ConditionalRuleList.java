@@ -32,20 +32,23 @@ public class ConditionalRuleList implements ICopyable<ConditionalRuleList>, ISer
     }
 
     // ── Trigger mode — sub-mode for consolidated trigger types ────────────────
-    // ON_ELYTRA / ON_SPRINT → START / STOP
-    // ON_BLOCK              → BREAK / PLACE
-    // ON_DEATH              → DIE   / RESPAWN
+    // MODULE                   → ACTIVATE / DEACTIVATE
+    // ON_ELYTRA / ON_SPRINT    → START / STOP
+    // ON_BLOCK                 → BREAK / PLACE
+    // ON_DEATH                 → DIE   / RESPAWN
     // ON_HEALTH / ON_HUNGER / ON_Y → BELOW / ABOVE
 
     public enum TriggerMode {
-        START  ("Start"),
-        STOP   ("Stop"),
-        BREAK  ("Break"),
-        PLACE  ("Place"),
-        DIE    ("Die"),
-        RESPAWN("Respawn"),
-        BELOW  ("Below"),
-        ABOVE  ("Above");
+        ACTIVATE  ("On activate"),
+        DEACTIVATE("On deactivate"),
+        START  ("On start"),
+        STOP   ("On stop"),
+        BREAK  ("On break"),
+        PLACE  ("On place"),
+        DIE    ("On die"),
+        RESPAWN("On respawn"),
+        BELOW  ("On below"),
+        ABOVE  ("On above");
 
         public final String label;
         TriggerMode(String label) { this.label = label; }
@@ -69,18 +72,17 @@ public class ConditionalRuleList implements ICopyable<ConditionalRuleList>, ISer
     // ── Trigger types ─────────────────────────────────────────────────────────
 
     public enum TriggerType {
-        MODULE_ON          ("Module activated"),
-        MODULE_OFF         ("Module deactivated"),
+        MODULE             ("Module"),             // triggerMode: ACTIVATE/DEACTIVATE; triggerModuleIds
         ON_LOGIN           ("On login"),
         ON_DAMAGE          ("On damage"),
         ON_ATTACK          ("On attack"),
-        ON_ELYTRA          ("Elytra"),            // triggerMode: START/STOP; Y filter: triggerYMode + triggerThreshold
+        ON_ELYTRA          ("Elytra"),             // triggerMode: START/STOP; Y filter: triggerYMode + triggerThreshold
         ON_SPRINT          ("Sprint"),             // triggerMode: START/STOP
         ON_BLOCK           ("Block"),              // triggerMode: BREAK/PLACE; block filter: triggerText
         ON_DEATH           ("Death"),              // triggerMode: DIE/RESPAWN
         ON_HEALTH          ("Health"),             // triggerMode: BELOW/ABOVE; triggerThreshold (half-hearts)
         ON_HUNGER          ("Hunger"),             // triggerMode: BELOW/ABOVE; triggerThreshold (food level)
-        ON_Y               ("Y coordinate"),       // triggerMode: BELOW/ABOVE; triggerThreshold (Y)
+        ON_Y               ("Y coordinate"),       // triggerMode: BELOW/ABOVE; triggerThreshold; triggerElytraOnly; revert
         ON_DIMENSION_CHANGE("On dimension change"),// triggerText (dimension ID, empty = any)
         ON_CHAT_CONTAINS   ("Chat contains");      // triggerText, triggerResponse, triggerResponseTimeout
 
@@ -94,8 +96,8 @@ public class ConditionalRuleList implements ICopyable<ConditionalRuleList>, ISer
 
     public static final class ConditionalRule {
         public TriggerType   triggerType;
-        public List<String>  triggerModuleIds; // MODULE_ON / MODULE_OFF only; any match fires
-        public TriggerMode   triggerMode;       // sub-mode for ON_ELYTRA/SPRINT/BLOCK/DEATH/HEALTH/HUNGER/Y
+        public List<String>  triggerModuleIds; // MODULE only; any match fires
+        public TriggerMode   triggerMode;       // sub-mode for MODULE/ELYTRA/SPRINT/BLOCK/DEATH/HEALTH/HUNGER/Y
         public String        triggerText;
         public int           triggerThreshold;
         public String        triggerResponse;
@@ -105,6 +107,7 @@ public class ConditionalRuleList implements ICopyable<ConditionalRuleList>, ISer
         public int           turnBackAfterSec; // *_TEMPORARILY / RE_*_SELF_AFTER only; 0 = no timer
         public boolean       revertOnTriggerOff; // restore pre-rule state when trigger reverses
         public YMode         triggerYMode;       // ON_ELYTRA only: altitude filter
+        public boolean       triggerElytraOnly;  // ON_Y only: only trigger while gliding
 
         public ConditionalRule(TriggerType triggerType, List<String> triggerModuleIds,
                                TriggerMode triggerMode,
@@ -112,7 +115,7 @@ public class ConditionalRuleList implements ICopyable<ConditionalRuleList>, ISer
                                String triggerResponse, int triggerResponseTimeout,
                                ActionType action, List<String> targetModuleIds,
                                int turnBackAfterSec, boolean revertOnTriggerOff,
-                               YMode triggerYMode) {
+                               YMode triggerYMode, boolean triggerElytraOnly) {
             this.triggerType              = triggerType;
             this.triggerModuleIds         = new ArrayList<>(triggerModuleIds);
             this.triggerMode              = triggerMode != null ? triggerMode : TriggerMode.START;
@@ -125,6 +128,7 @@ public class ConditionalRuleList implements ICopyable<ConditionalRuleList>, ISer
             this.turnBackAfterSec         = turnBackAfterSec;
             this.revertOnTriggerOff       = revertOnTriggerOff;
             this.triggerYMode             = triggerYMode != null ? triggerYMode : YMode.ANY;
+            this.triggerElytraOnly        = triggerElytraOnly;
         }
 
         public NbtCompound toNbt() {
@@ -145,6 +149,7 @@ public class ConditionalRuleList implements ICopyable<ConditionalRuleList>, ISer
             tag.putInt("turnBack", turnBackAfterSec);
             tag.putBoolean("revert", revertOnTriggerOff);
             tag.putString("triggerYMode", triggerYMode.name());
+            tag.putBoolean("elytraOnly", triggerElytraOnly);
             return tag;
         }
 
@@ -153,25 +158,28 @@ public class ConditionalRuleList implements ICopyable<ConditionalRuleList>, ISer
             String typeStr = tag.getString("triggerType");
             TriggerMode migratedMode = null;
             switch (typeStr) {
+                case "MODULE_ON"       -> { typeStr = "MODULE";      migratedMode = TriggerMode.ACTIVATE;   }
+                case "MODULE_OFF"      -> { typeStr = "MODULE";      migratedMode = TriggerMode.DEACTIVATE; }
                 case "ON_ELYTRA"       -> migratedMode = TriggerMode.START;
-                case "ON_ELYTRA_STOP"  -> { typeStr = "ON_ELYTRA";  migratedMode = TriggerMode.STOP;    }
-                case "ON_SPRINT_START" -> { typeStr = "ON_SPRINT";   migratedMode = TriggerMode.START;   }
-                case "ON_SPRINT_STOP"  -> { typeStr = "ON_SPRINT";   migratedMode = TriggerMode.STOP;    }
-                case "ON_BREAK_BLOCK"  -> { typeStr = "ON_BLOCK";    migratedMode = TriggerMode.BREAK;   }
-                case "ON_PLACE_BLOCK"  -> { typeStr = "ON_BLOCK";    migratedMode = TriggerMode.PLACE;   }
+                case "ON_ELYTRA_STOP"  -> { typeStr = "ON_ELYTRA";  migratedMode = TriggerMode.STOP;       }
+                case "ON_SPRINT_START" -> { typeStr = "ON_SPRINT";   migratedMode = TriggerMode.START;      }
+                case "ON_SPRINT_STOP"  -> { typeStr = "ON_SPRINT";   migratedMode = TriggerMode.STOP;       }
+                case "ON_BREAK_BLOCK"  -> { typeStr = "ON_BLOCK";    migratedMode = TriggerMode.BREAK;      }
+                case "ON_PLACE_BLOCK"  -> { typeStr = "ON_BLOCK";    migratedMode = TriggerMode.PLACE;      }
                 case "ON_DEATH"        -> migratedMode = TriggerMode.DIE;
-                case "ON_RESPAWN"      -> { typeStr = "ON_DEATH";    migratedMode = TriggerMode.RESPAWN; }
-                case "ON_HEALTH_BELOW" -> { typeStr = "ON_HEALTH";   migratedMode = TriggerMode.BELOW;   }
-                case "ON_HEALTH_ABOVE" -> { typeStr = "ON_HEALTH";   migratedMode = TriggerMode.ABOVE;   }
-                case "ON_HUNGER_BELOW" -> { typeStr = "ON_HUNGER";   migratedMode = TriggerMode.BELOW;   }
-                case "ON_HUNGER_ABOVE" -> { typeStr = "ON_HUNGER";   migratedMode = TriggerMode.ABOVE;   }
-                case "ON_Y_BELOW"      -> { typeStr = "ON_Y";        migratedMode = TriggerMode.BELOW;   }
-                case "ON_Y_ABOVE"      -> { typeStr = "ON_Y";        migratedMode = TriggerMode.ABOVE;   }
+                case "ON_RESPAWN"      -> { typeStr = "ON_DEATH";    migratedMode = TriggerMode.RESPAWN;    }
+                case "ON_HEALTH_BELOW" -> { typeStr = "ON_HEALTH";   migratedMode = TriggerMode.BELOW;      }
+                case "ON_HEALTH_ABOVE" -> { typeStr = "ON_HEALTH";   migratedMode = TriggerMode.ABOVE;      }
+                case "ON_HUNGER_BELOW" -> { typeStr = "ON_HUNGER";   migratedMode = TriggerMode.BELOW;      }
+                case "ON_HUNGER_ABOVE" -> { typeStr = "ON_HUNGER";   migratedMode = TriggerMode.ABOVE;      }
+                case "ON_Y_BELOW"      -> { typeStr = "ON_Y";        migratedMode = TriggerMode.BELOW;      }
+                case "ON_Y_ABOVE"      -> { typeStr = "ON_Y";        migratedMode = TriggerMode.ABOVE;      }
+                case "ON_HEIGHT"       -> typeStr = "ON_Y";
             }
 
             TriggerType type;
             try { type = TriggerType.valueOf(typeStr); }
-            catch (IllegalArgumentException e) { type = TriggerType.MODULE_ON; }
+            catch (IllegalArgumentException e) { type = TriggerType.MODULE; }
 
             ActionType action;
             try { action = ActionType.valueOf(tag.getString("action")); }
@@ -183,7 +191,13 @@ public class ConditionalRuleList implements ICopyable<ConditionalRuleList>, ISer
             TriggerMode triggerMode = migratedMode;
             if (triggerMode == null) {
                 try { triggerMode = TriggerMode.valueOf(tag.getString("triggerMode")); }
-                catch (Exception e) { triggerMode = TriggerMode.START; }
+                catch (Exception e) {
+                    triggerMode = switch (type) {
+                        case MODULE  -> TriggerMode.ACTIVATE;
+                        case ON_HEALTH, ON_HUNGER, ON_Y -> TriggerMode.BELOW;
+                        default      -> TriggerMode.START;
+                    };
+                }
             }
 
             YMode yMode;
@@ -212,7 +226,8 @@ public class ConditionalRuleList implements ICopyable<ConditionalRuleList>, ISer
                 tag.getString("triggerText"), tag.getInt("triggerThreshold"),
                 tag.getString("triggerResponse"), tag.getInt("triggerResponseTimeout"),
                 action, targets,
-                tag.getInt("turnBack"), tag.getBoolean("revert"), yMode);
+                tag.getInt("turnBack"), tag.getBoolean("revert"), yMode,
+                tag.getBoolean("elytraOnly"));
         }
     }
 
@@ -230,7 +245,7 @@ public class ConditionalRuleList implements ICopyable<ConditionalRuleList>, ISer
                 r.triggerText, r.triggerThreshold,
                 r.triggerResponse, r.triggerResponseTimeout,
                 r.action, r.targetModuleIds, r.turnBackAfterSec, r.revertOnTriggerOff,
-                r.triggerYMode));
+                r.triggerYMode, r.triggerElytraOnly));
         }
         return this;
     }

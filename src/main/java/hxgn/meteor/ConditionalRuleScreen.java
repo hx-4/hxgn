@@ -49,9 +49,9 @@ public class ConditionalRuleScreen extends WindowScreen {
         WButton addBtn = add(theme.button("+ Add Rule")).expandX().widget();
         addBtn.action = () -> {
             data.rules.add(new ConditionalRule(
-                TriggerType.MODULE_ON, new ArrayList<>(), TriggerMode.START,
+                TriggerType.MODULE, new ArrayList<>(), TriggerMode.ACTIVATE,
                 "", 0, "", 0,
-                ActionType.DISABLE, new ArrayList<>(), 0, false, YMode.ANY));
+                ActionType.DISABLE, new ArrayList<>(), 0, false, YMode.ANY, false));
             mc.setScreen(new EditRuleScreen(theme, data, data.rules.size() - 1, this));
         };
     }
@@ -73,15 +73,14 @@ public class ConditionalRuleScreen extends WindowScreen {
             ConditionalRule rule = data.rules.get(i);
             final int idx = i;
 
-            boolean hasTriggerModules = rule.triggerType == TriggerType.MODULE_ON
-                                     || rule.triggerType == TriggerType.MODULE_OFF;
+            boolean hasTriggerModules = rule.triggerType == TriggerType.MODULE;
 
             String triggerLabel;
             if (hasTriggerModules) {
                 String mods = rule.triggerModuleIds.isEmpty() ? "(none)"
                     : rule.triggerModuleIds.size() == 1 ? moduleTitle(rule.triggerModuleIds.get(0))
                     : rule.triggerModuleIds.size() + " modules";
-                triggerLabel = mods + " · " + rule.triggerType.label;
+                triggerLabel = mods + " · Module " + rule.triggerMode.label;
             } else if (rule.triggerType == TriggerType.ON_ELYTRA
                     || rule.triggerType == TriggerType.ON_SPRINT) {
                 String yPart = (rule.triggerType == TriggerType.ON_ELYTRA && rule.triggerYMode != YMode.ANY)
@@ -93,9 +92,11 @@ public class ConditionalRuleScreen extends WindowScreen {
             } else if (rule.triggerType == TriggerType.ON_DEATH) {
                 triggerLabel = rule.triggerMode.label;
             } else if (rule.triggerType == TriggerType.ON_HEALTH
-                    || rule.triggerType == TriggerType.ON_HUNGER
-                    || rule.triggerType == TriggerType.ON_Y) {
+                    || rule.triggerType == TriggerType.ON_HUNGER) {
                 triggerLabel = rule.triggerType.label + " " + rule.triggerMode.label + " " + rule.triggerThreshold;
+            } else if (rule.triggerType == TriggerType.ON_Y) {
+                String elytraPart = rule.triggerElytraOnly ? " (elytra only)" : "";
+                triggerLabel = rule.triggerType.label + " " + rule.triggerMode.label + " " + rule.triggerThreshold + elytraPart;
             } else if (rule.triggerType == TriggerType.ON_CHAT_CONTAINS) {
                 triggerLabel = rule.triggerText.isEmpty() ? rule.triggerType.label
                     : rule.triggerType.label + ": \"" + rule.triggerText + "\"";
@@ -156,19 +157,21 @@ public class ConditionalRuleScreen extends WindowScreen {
             }
         }
 
-        private static final TriggerMode[] MODES_START_STOP  = { TriggerMode.START, TriggerMode.STOP    };
-        private static final TriggerMode[] MODES_BREAK_PLACE = { TriggerMode.BREAK, TriggerMode.PLACE   };
-        private static final TriggerMode[] MODES_DIE_RESPAWN = { TriggerMode.DIE,   TriggerMode.RESPAWN };
-        private static final TriggerMode[] MODES_BELOW_ABOVE = { TriggerMode.BELOW, TriggerMode.ABOVE   };
+        private static final TriggerMode[] MODES_ACTIVATE_DEACTIVATE = { TriggerMode.ACTIVATE, TriggerMode.DEACTIVATE };
+        private static final TriggerMode[] MODES_START_STOP          = { TriggerMode.START,    TriggerMode.STOP       };
+        private static final TriggerMode[] MODES_BREAK_PLACE         = { TriggerMode.BREAK,    TriggerMode.PLACE      };
+        private static final TriggerMode[] MODES_DIE_RESPAWN         = { TriggerMode.DIE,      TriggerMode.RESPAWN    };
+        private static final TriggerMode[] MODES_BELOW_ABOVE         = { TriggerMode.BELOW,    TriggerMode.ABOVE      };
 
         /** Returns the valid TriggerMode options for a trigger type, or null if none. */
         private static TriggerMode[] triggerModes(TriggerType type) {
             return switch (type) {
-                case ON_ELYTRA, ON_SPRINT        -> MODES_START_STOP;
-                case ON_BLOCK                    -> MODES_BREAK_PLACE;
-                case ON_DEATH                    -> MODES_DIE_RESPAWN;
-                case ON_HEALTH, ON_HUNGER, ON_Y  -> MODES_BELOW_ABOVE;
-                default                          -> null;
+                case MODULE                                      -> MODES_ACTIVATE_DEACTIVATE;
+                case ON_ELYTRA, ON_SPRINT                       -> MODES_START_STOP;
+                case ON_BLOCK                                    -> MODES_BREAK_PLACE;
+                case ON_DEATH                                    -> MODES_DIE_RESPAWN;
+                case ON_HEALTH, ON_HUNGER, ON_Y                  -> MODES_BELOW_ABOVE;
+                default                                          -> null;
             };
         }
 
@@ -189,6 +192,7 @@ public class ConditionalRuleScreen extends WindowScreen {
         private boolean            editRevert;
         private YMode              editYMode;
         private DimensionOption    editDimension;
+        private boolean            editElytraOnly;
 
         public EditRuleScreen(GuiTheme theme, ConditionalRuleList data, int idx,
                               ConditionalRuleScreen parent) {
@@ -211,6 +215,7 @@ public class ConditionalRuleScreen extends WindowScreen {
             this.editRevert                 = r.revertOnTriggerOff;
             this.editYMode                  = r.triggerYMode;
             this.editDimension              = DimensionOption.fromKey(r.triggerText);
+            this.editElytraOnly             = r.triggerElytraOnly;
         }
 
         @Override
@@ -224,12 +229,12 @@ public class ConditionalRuleScreen extends WindowScreen {
             typeDropdown.action = () -> { editType = typeDropdown.get(); reload(); };
             form.row();
 
-            // Trigger modules (MODULE_ON / MODULE_OFF only)
-            boolean hasTriggerModules = editType == TriggerType.MODULE_ON
-                                     || editType == TriggerType.MODULE_OFF;
-            if (hasTriggerModules) {
-                addModuleSelector(form, "Trigger module(s):", editTriggerModules, "Select Trigger Modules");
-            }
+            boolean hasTriggerModules = editType == TriggerType.MODULE;
+            boolean hasRevert = editType == TriggerType.MODULE
+                             || editType == TriggerType.ON_ELYTRA
+                             || editType == TriggerType.ON_SPRINT
+                             || editType == TriggerType.ON_DEATH
+                             || editType == TriggerType.ON_Y;
 
             // Mode dropdown (for triggers with sub-modes)
             TriggerMode[] modeOptions = triggerModes(editType);
@@ -244,6 +249,11 @@ public class ConditionalRuleScreen extends WindowScreen {
                     theme.dropdown(modeOptions, editTriggerMode)).expandX().widget();
                 modeDrop.action = () -> { editTriggerMode = modeDrop.get(); reload(); };
                 form.row();
+            }
+
+            // Trigger modules (MODULE only — placed after mode so you pick activate vs deactivate first)
+            if (hasTriggerModules) {
+                addModuleSelector(form, "Trigger module(s):", editTriggerModules, "Select Trigger Modules");
             }
 
             // Chat fields
@@ -286,6 +296,11 @@ public class ConditionalRuleScreen extends WindowScreen {
                     theme.intEdit(editTriggerThreshold, -64, 320, false)).expandX().widget();
                 threshEdit.action = () -> editTriggerThreshold = threshEdit.get();
                 form.row();
+
+                form.add(theme.label("Elytra only:"));
+                WCheckbox elytraOnlyBox = form.add(theme.checkbox(editElytraOnly)).widget();
+                elytraOnlyBox.action = () -> editElytraOnly = elytraOnlyBox.checked;
+                form.row();
             }
 
             // Block filter
@@ -325,7 +340,7 @@ public class ConditionalRuleScreen extends WindowScreen {
             }
 
             // Action — self-targeting actions only make sense for module triggers
-            boolean selfAllowed = editType == TriggerType.MODULE_ON || editType == TriggerType.MODULE_OFF;
+            boolean selfAllowed = editType == TriggerType.MODULE;
             if (!selfAllowed && (editAction == ActionType.RE_ENABLE_SELF_AFTER
                               || editAction == ActionType.RE_DISABLE_SELF_AFTER)) {
                 editAction = ActionType.ENABLE;
@@ -361,8 +376,8 @@ public class ConditionalRuleScreen extends WindowScreen {
                 form.row();
             }
 
-            // Revert when trigger reverses (MODULE_ON / MODULE_OFF only)
-            if (hasTriggerModules) {
+            // Revert when trigger reverses
+            if (hasRevert) {
                 form.add(theme.label("Revert when trigger reverses:"));
                 WCheckbox revertBox = form.add(theme.checkbox(editRevert)).widget();
                 revertBox.action = () -> editRevert = revertBox.checked;
@@ -377,7 +392,7 @@ public class ConditionalRuleScreen extends WindowScreen {
                                   || editAction == ActionType.ENABLE_TEMPORARILY
                                   || editAction == ActionType.RE_ENABLE_SELF_AFTER
                                   || editAction == ActionType.RE_DISABLE_SELF_AFTER;
-                boolean needsRevert     = hasTriggerModules;
+                boolean needsRevert     = hasRevert;
                 boolean isChat          = editType == TriggerType.ON_CHAT_CONTAINS;
                 boolean usesTriggerText = isChat
                                        || editType == TriggerType.ON_DIMENSION_CHANGE
@@ -398,7 +413,8 @@ public class ConditionalRuleScreen extends WindowScreen {
                     editAction, savedTargets,
                     needsDelay  ? editTurnBack : 0,
                     needsRevert ? editRevert   : false,
-                    usesYMode   ? editYMode    : YMode.ANY));
+                    usesYMode   ? editYMode    : YMode.ANY,
+                    editType == TriggerType.ON_Y ? editElytraOnly : false));
                 mc.setScreen(parent);
                 parent.reload();
             };

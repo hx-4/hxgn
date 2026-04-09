@@ -164,9 +164,9 @@ public class AutoToggle extends Module {
         prevDead      = mc.player != null && mc.player.getHealth() <= 0;
         prevHealth   = mc.player != null ? mc.player.getHealth() : -1f;
 
-        // Seed MODULE_ON / MODULE_OFF trigger states
+        // Seed MODULE trigger states
         for (ConditionalRule rule : conditionalRules.get().rules) {
-            if (rule.triggerType != TriggerType.MODULE_ON && rule.triggerType != TriggerType.MODULE_OFF) continue;
+            if (rule.triggerType != TriggerType.MODULE) continue;
             for (String id : rule.triggerModuleIds) {
                 Module m = Modules.get().get(id);
                 if (m != null) lastKnownState.putIfAbsent(m, m.isActive());
@@ -190,7 +190,7 @@ public class AutoToggle extends Module {
     private void handleModuleChange() {
         List<ConditionalRule> rules = conditionalRules.get().rules;
 
-        // Build trigger cache for MODULE_ON/OFF rules; detect rising and falling edges.
+        // Build trigger cache for MODULE rules; detect rising and falling edges.
         // Each unique ID is resolved and state-tracked exactly once to prevent duplicate
         // firings when multiple rules share a trigger module.
         Map<String, Module> triggerCache  = new HashMap<>();
@@ -198,7 +198,7 @@ public class AutoToggle extends Module {
         Set<Module> justDeactivated = new HashSet<>();
 
         for (ConditionalRule rule : rules) {
-            if (rule.triggerType != TriggerType.MODULE_ON && rule.triggerType != TriggerType.MODULE_OFF) continue;
+            if (rule.triggerType != TriggerType.MODULE) continue;
             for (String id : rule.triggerModuleIds) {
                 if (triggerCache.containsKey(id)) continue;
                 Module trigger = Modules.get().get(id);
@@ -213,11 +213,12 @@ public class AutoToggle extends Module {
             }
         }
 
-        // Fire MODULE_ON rules on rising edge; MODULE_OFF rules on falling edge
+        // Fire MODULE rules on edge: ACTIVATE on rising, DEACTIVATE on falling
         if (!justActivated.isEmpty() || !justDeactivated.isEmpty()) {
             for (ConditionalRule rule : rules) {
-                Set<Module> edge = rule.triggerType == TriggerType.MODULE_ON  ? justActivated
-                                 : rule.triggerType == TriggerType.MODULE_OFF ? justDeactivated
+                if (rule.triggerType != TriggerType.MODULE) continue;
+                Set<Module> edge = rule.triggerMode == TriggerMode.ACTIVATE   ? justActivated
+                                 : rule.triggerMode == TriggerMode.DEACTIVATE ? justDeactivated
                                  : null;
                 if (edge == null || edge.isEmpty()) continue;
                 boolean shouldFire = rule.triggerModuleIds.stream()
@@ -228,13 +229,13 @@ public class AutoToggle extends Module {
             }
         }
 
-        // Revert: MODULE_ON rule reverts when no trigger is active anymore;
-        //         MODULE_OFF rule reverts when any trigger becomes active again.
+        // Revert: ACTIVATE rule reverts when no trigger is active; DEACTIVATE when any becomes active.
         if (!pendingReverts.isEmpty()) {
             pendingReverts.entrySet().removeIf(entry -> {
                 ConditionalRule rule = entry.getKey();
+                if (rule.triggerType != TriggerType.MODULE || !rule.revertOnTriggerOff) return false;
                 boolean shouldRevert;
-                if (rule.triggerType == TriggerType.MODULE_ON) {
+                if (rule.triggerMode == TriggerMode.ACTIVATE) {
                     shouldRevert = rule.triggerModuleIds.stream()
                         .map(triggerCache::get).filter(m -> m != null).noneMatch(Module::isActive);
                 } else {
@@ -306,11 +307,11 @@ public class AutoToggle extends Module {
         List<ConditionalRule> rules = conditionalRules.get().rules;
 
         // Drop stale references left by rule edits (rule objects replaced when saved)
-        healthArmed.retainAll(rules);
-        hungerArmed.retainAll(rules);
-        yArmed.retainAll(rules);
-        lastResponseSent.keySet().retainAll(rules);
-        pendingReverts.keySet().retainAll(rules);
+        if (!healthArmed.isEmpty())      healthArmed.retainAll(rules);
+        if (!hungerArmed.isEmpty())      hungerArmed.retainAll(rules);
+        if (!yArmed.isEmpty())           yArmed.retainAll(rules);
+        if (!lastResponseSent.isEmpty()) lastResponseSent.keySet().retainAll(rules);
+        if (!pendingReverts.isEmpty())   pendingReverts.keySet().retainAll(rules);
 
         // Timed enables/disables from *_TEMPORARILY and RE_*_SELF_AFTER actions
         if (!pendingEnables.isEmpty() || !pendingDisables.isEmpty()) {
@@ -334,27 +335,33 @@ public class AutoToggle extends Module {
         // Elytra (start / stop edges, both support optional altitude filter)
         boolean elytra = mc.player.isGliding();
         if (elytra != prevElytra) {
-            TriggerMode edgeMode = elytra ? TriggerMode.START : TriggerMode.STOP;
+            TriggerMode edgeMode   = elytra ? TriggerMode.START : TriggerMode.STOP;
+            TriggerMode revertMode = elytra ? TriggerMode.STOP  : TriggerMode.START;
             for (ConditionalRule rule : rules) {
                 if (rule.triggerType != TriggerType.ON_ELYTRA || rule.triggerMode != edgeMode) continue;
                 if (!checkYMode(rule, y)) continue;
                 applyRuleToTargets(rule);
             }
+            revertRulesWithMode(TriggerType.ON_ELYTRA, revertMode);
         }
         prevElytra = elytra;
 
         // Sprint (start / stop edges)
         boolean sprinting = mc.player.isSprinting();
-        if (sprinting != prevSprinting)
-            fireRules(TriggerType.ON_SPRINT, sprinting ? TriggerMode.START : TriggerMode.STOP);
+        if (sprinting != prevSprinting) {
+            TriggerMode edgeMode   = sprinting ? TriggerMode.START : TriggerMode.STOP;
+            TriggerMode revertMode = sprinting ? TriggerMode.STOP  : TriggerMode.START;
+            fireRules(TriggerType.ON_SPRINT, edgeMode);
+            revertRulesWithMode(TriggerType.ON_SPRINT, revertMode);
+        }
         prevSprinting = sprinting;
 
         float health = mc.player.getHealth();
 
         // Death / Respawn
         boolean dead = health <= 0;
-        if (dead  && !prevDead) fireRules(TriggerType.ON_DEATH, TriggerMode.DIE);
-        if (!dead && prevDead)  fireRules(TriggerType.ON_DEATH, TriggerMode.RESPAWN);
+        if (dead  && !prevDead) { fireRules(TriggerType.ON_DEATH, TriggerMode.DIE);     revertRulesWithMode(TriggerType.ON_DEATH, TriggerMode.RESPAWN); }
+        if (!dead && prevDead)  { fireRules(TriggerType.ON_DEATH, TriggerMode.RESPAWN); revertRulesWithMode(TriggerType.ON_DEATH, TriggerMode.DIE);     }
         prevDead = dead;
 
         // Damage
@@ -362,9 +369,9 @@ public class AutoToggle extends Module {
         prevHealth = health;
 
         // Health / Hunger / Y threshold (edge-triggered per rule; mode selects BELOW or ABOVE)
-        applyThresholdTrigger(rules, TriggerType.ON_HEALTH, health, healthArmed);
-        applyThresholdTrigger(rules, TriggerType.ON_HUNGER, mc.player.getHungerManager().getFoodLevel(), hungerArmed);
-        applyThresholdTrigger(rules, TriggerType.ON_Y, y, yArmed);
+        applyThresholdTrigger(rules, TriggerType.ON_HEALTH, health, healthArmed, false);
+        applyThresholdTrigger(rules, TriggerType.ON_HUNGER, mc.player.getHungerManager().getFoodLevel(), hungerArmed, false);
+        applyThresholdTrigger(rules, TriggerType.ON_Y, y, yArmed, elytra);
 
         // Dimension change
         if (mc.world != null) {
@@ -409,15 +416,42 @@ public class AutoToggle extends Module {
         }
     }
 
+    // armedSet.add returns true only on re-arm (trigger→safe transition), which is when revert fires.
+    // isGliding is only meaningful for ON_Y rules with triggerElytraOnly; pass false for health/hunger.
     private void applyThresholdTrigger(List<ConditionalRule> rules, TriggerType type, double value,
-                                       Set<ConditionalRule> armedSet) {
+                                       Set<ConditionalRule> armedSet, boolean isGliding) {
         for (ConditionalRule rule : rules) {
             if (rule.triggerType != type) continue;
+            if (rule.triggerElytraOnly && !isGliding) {
+                armedSet.remove(rule); // reset so it re-arms cleanly when gliding resumes
+                continue;
+            }
             boolean shouldArm = rule.triggerMode == TriggerMode.BELOW
                 ? value > rule.triggerThreshold : value < rule.triggerThreshold;
-            if (shouldArm) armedSet.add(rule);
-            else if (armedSet.remove(rule)) applyRuleToTargets(rule);
+            if (shouldArm) {
+                if (armedSet.add(rule) && rule.revertOnTriggerOff) revertRule(rule);
+            } else if (armedSet.remove(rule)) {
+                applyRuleToTargets(rule);
+            }
         }
+    }
+
+    private void revertRule(ConditionalRule rule) {
+        Map<Module, Boolean> snapshot = pendingReverts.remove(rule);
+        if (snapshot != null)
+            for (Map.Entry<Module, Boolean> entry : snapshot.entrySet())
+                restoreState(entry.getKey(), entry.getValue());
+    }
+
+    private void revertRulesWithMode(TriggerType type, TriggerMode mode) {
+        if (pendingReverts.isEmpty()) return;
+        pendingReverts.entrySet().removeIf(entry -> {
+            ConditionalRule rule = entry.getKey();
+            if (rule.triggerType != type || rule.triggerMode != mode || !rule.revertOnTriggerOff) return false;
+            for (Map.Entry<Module, Boolean> r : entry.getValue().entrySet())
+                restoreState(r.getKey(), r.getValue());
+            return true;
+        });
     }
 
     private void applyRule(ConditionalRule rule, Module target) {
