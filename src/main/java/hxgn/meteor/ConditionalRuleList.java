@@ -35,19 +35,19 @@ public class ConditionalRuleList implements IGeneric<ConditionalRuleList> {
     // ON_ELYTRA / ON_SPRINT         → START / STOP
     // ON_BLOCK                      → BREAK / PLACE
     // ON_DEATH                      → DIE   / RESPAWN
-    // ON_HEALTH / ON_HUNGER / ON_Y / ON_HEIGHT → BELOW / ABOVE
+    // ON_HEALTH / ON_HUNGER / ON_Y → BELOW / ABOVE
 
     public enum TriggerMode {
-        ACTIVATE  ("Activate"),
-        DEACTIVATE("Deactivate"),
-        START  ("Start"),
-        STOP   ("Stop"),
-        BREAK  ("Break"),
-        PLACE  ("Place"),
-        DIE    ("Die"),
-        RESPAWN("Respawn"),
-        BELOW  ("Below"),
-        ABOVE  ("Above");
+        ACTIVATE  ("On activate"),
+        DEACTIVATE("On deactivate"),
+        START  ("On start"),
+        STOP   ("On stop"),
+        BREAK  ("On break"),
+        PLACE  ("On place"),
+        DIE    ("On die"),
+        RESPAWN("On respawn"),
+        BELOW  ("On below"),
+        ABOVE  ("On above");
 
         public final String label;
         TriggerMode(String label) { this.label = label; }
@@ -81,8 +81,7 @@ public class ConditionalRuleList implements IGeneric<ConditionalRuleList> {
         ON_DEATH           ("Death"),              // triggerMode: DIE/RESPAWN
         ON_HEALTH          ("Health"),             // triggerMode: BELOW/ABOVE; triggerThreshold (half-hearts)
         ON_HUNGER          ("Hunger"),             // triggerMode: BELOW/ABOVE; triggerThreshold (food level)
-        ON_Y               ("Y coordinate"),       // triggerMode: BELOW/ABOVE; triggerThreshold (Y)
-        ON_HEIGHT          ("Height"),             // triggerMode: BELOW/ABOVE; triggerThreshold; triggerElytraOnly
+        ON_Y               ("Y coordinate"),       // triggerMode: BELOW/ABOVE; triggerThreshold; triggerElytraOnly; revert
         ON_DIMENSION_CHANGE("On dimension change"),// triggerText (dimension ID, empty = any)
         ON_CHAT_CONTAINS   ("Chat contains");      // triggerText, triggerResponse, triggerResponseTimeout
 
@@ -97,7 +96,7 @@ public class ConditionalRuleList implements IGeneric<ConditionalRuleList> {
     public static final class ConditionalRule {
         public TriggerType   triggerType;
         public List<String>  triggerModuleIds; // MODULE only; any match fires
-        public TriggerMode   triggerMode;       // sub-mode for MODULE/ELYTRA/SPRINT/BLOCK/DEATH/HEALTH/HUNGER/Y/HEIGHT
+        public TriggerMode   triggerMode;       // sub-mode for MODULE/ELYTRA/SPRINT/BLOCK/DEATH/HEALTH/HUNGER/Y
         public String        triggerText;
         public int           triggerThreshold;
         public String        triggerResponse;
@@ -107,7 +106,7 @@ public class ConditionalRuleList implements IGeneric<ConditionalRuleList> {
         public int           turnBackAfterSec; // *_TEMPORARILY / RE_*_SELF_AFTER only; 0 = no timer
         public boolean       revertOnTriggerOff; // restore pre-rule state when trigger reverses
         public YMode         triggerYMode;       // ON_ELYTRA only: altitude filter
-        public boolean       triggerElytraOnly;  // ON_HEIGHT only: only trigger while gliding
+        public boolean       triggerElytraOnly;  // ON_Y only: only trigger while gliding
 
         public ConditionalRule(TriggerType triggerType, List<String> triggerModuleIds,
                                TriggerMode triggerMode,
@@ -174,6 +173,7 @@ public class ConditionalRuleList implements IGeneric<ConditionalRuleList> {
                 case "ON_HUNGER_ABOVE" -> { typeStr = "ON_HUNGER";   migratedMode = TriggerMode.ABOVE;      }
                 case "ON_Y_BELOW"      -> { typeStr = "ON_Y";        migratedMode = TriggerMode.BELOW;      }
                 case "ON_Y_ABOVE"      -> { typeStr = "ON_Y";        migratedMode = TriggerMode.ABOVE;      }
+                case "ON_HEIGHT"       -> typeStr = "ON_Y";
             }
 
             TriggerType type;
@@ -191,7 +191,11 @@ public class ConditionalRuleList implements IGeneric<ConditionalRuleList> {
             if (triggerMode == null) {
                 try { triggerMode = TriggerMode.valueOf(tag.getString("triggerMode", "")); }
                 catch (Exception e) {
-                    triggerMode = (type == TriggerType.MODULE) ? TriggerMode.ACTIVATE : TriggerMode.START;
+                    triggerMode = switch (type) {
+                        case MODULE  -> TriggerMode.ACTIVATE;
+                        case ON_HEALTH, ON_HUNGER, ON_Y -> TriggerMode.BELOW;
+                        default      -> TriggerMode.START;
+                    };
                 }
             }
 

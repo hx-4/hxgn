@@ -92,11 +92,10 @@ public class ConditionalRuleScreen extends WindowScreen {
             } else if (rule.triggerType == TriggerType.ON_DEATH) {
                 triggerLabel = rule.triggerMode.label;
             } else if (rule.triggerType == TriggerType.ON_HEALTH
-                    || rule.triggerType == TriggerType.ON_HUNGER
-                    || rule.triggerType == TriggerType.ON_Y) {
+                    || rule.triggerType == TriggerType.ON_HUNGER) {
                 triggerLabel = rule.triggerType.label + " " + rule.triggerMode.label + " " + rule.triggerThreshold;
-            } else if (rule.triggerType == TriggerType.ON_HEIGHT) {
-                String elytraPart = rule.triggerElytraOnly ? " (elytra)" : "";
+            } else if (rule.triggerType == TriggerType.ON_Y) {
+                String elytraPart = rule.triggerElytraOnly ? " (elytra only)" : "";
                 triggerLabel = rule.triggerType.label + " " + rule.triggerMode.label + " " + rule.triggerThreshold + elytraPart;
             } else if (rule.triggerType == TriggerType.ON_CHAT_CONTAINS) {
                 triggerLabel = rule.triggerText.isEmpty() ? rule.triggerType.label
@@ -171,7 +170,7 @@ public class ConditionalRuleScreen extends WindowScreen {
                 case ON_ELYTRA, ON_SPRINT                       -> MODES_START_STOP;
                 case ON_BLOCK                                    -> MODES_BREAK_PLACE;
                 case ON_DEATH                                    -> MODES_DIE_RESPAWN;
-                case ON_HEALTH, ON_HUNGER, ON_Y, ON_HEIGHT      -> MODES_BELOW_ABOVE;
+                case ON_HEALTH, ON_HUNGER, ON_Y                 -> MODES_BELOW_ABOVE;
                 default                                          -> null;
             };
         }
@@ -230,16 +229,12 @@ public class ConditionalRuleScreen extends WindowScreen {
             typeDropdown.action = () -> { editType = typeDropdown.get(); reload(); };
             form.row();
 
-            // Trigger modules (MODULE only)
             boolean hasTriggerModules = editType == TriggerType.MODULE;
             boolean hasRevert = editType == TriggerType.MODULE
                              || editType == TriggerType.ON_ELYTRA
                              || editType == TriggerType.ON_SPRINT
                              || editType == TriggerType.ON_DEATH
-                             || editType == TriggerType.ON_HEIGHT;
-            if (hasTriggerModules) {
-                addModuleSelector(form, "Trigger module(s):", editTriggerModules, "Select Trigger Modules");
-            }
+                             || editType == TriggerType.ON_Y;
 
             // Mode dropdown (for triggers with sub-modes)
             TriggerMode[] modeOptions = triggerModes(editType);
@@ -254,6 +249,11 @@ public class ConditionalRuleScreen extends WindowScreen {
                     theme.dropdown(modeOptions, editTriggerMode)).expandX().widget();
                 modeDrop.action = () -> { editTriggerMode = modeDrop.get(); reload(); };
                 form.row();
+            }
+
+            // Trigger modules (MODULE only) — after mode so user picks Activate/Deactivate first
+            if (hasTriggerModules) {
+                addModuleSelector(form, "Trigger module(s):", editTriggerModules, "Select Trigger Modules");
             }
 
             // Chat fields
@@ -291,16 +291,9 @@ public class ConditionalRuleScreen extends WindowScreen {
                 threshEdit.action = () -> editTriggerThreshold = threshEdit.get();
                 form.row();
             } else if (editType == TriggerType.ON_Y) {
-                form.add(theme.label("Threshold (Y coordinate):"));
+                form.add(theme.label("Threshold (Y coordinate, -64 to 320):"));
                 WIntEdit threshEdit = form.add(
                     theme.intEdit(editTriggerThreshold, -64, 320, false)).expandX().widget();
-                threshEdit.action = () -> editTriggerThreshold = threshEdit.get();
-                form.row();
-            } else if (editType == TriggerType.ON_HEIGHT) {
-                form.add(theme.label("Threshold (height, 0–256):"));
-                WIntEdit threshEdit = form.add(
-                    theme.intEdit(editTriggerThreshold == 0 ? 10 : editTriggerThreshold, 0, 256, false))
-                    .expandX().widget();
                 threshEdit.action = () -> editTriggerThreshold = threshEdit.get();
                 form.row();
 
@@ -407,7 +400,6 @@ public class ConditionalRuleScreen extends WindowScreen {
                 boolean usesThreshold   = editType == TriggerType.ON_HEALTH
                                        || editType == TriggerType.ON_HUNGER
                                        || editType == TriggerType.ON_Y
-                                       || editType == TriggerType.ON_HEIGHT
                                        || (editType == TriggerType.ON_ELYTRA && editYMode != YMode.ANY);
                 boolean usesYMode       = editType == TriggerType.ON_ELYTRA;
                 List<String> savedTargets = isSelfAction ? new ArrayList<>() : editTargetModules;
@@ -422,7 +414,7 @@ public class ConditionalRuleScreen extends WindowScreen {
                     needsDelay  ? editTurnBack : 0,
                     needsRevert ? editRevert   : false,
                     usesYMode   ? editYMode    : YMode.ANY,
-                    editType == TriggerType.ON_HEIGHT ? editElytraOnly : false));
+                    editType == TriggerType.ON_Y ? editElytraOnly : false));
                 mc.setScreen(parent);
                 parent.reload();
             };

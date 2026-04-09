@@ -110,7 +110,6 @@ public class AutoToggle extends Module {
     private final Set<ConditionalRule> healthArmed = new HashSet<>();
     private final Set<ConditionalRule> hungerArmed = new HashSet<>();
     private final Set<ConditionalRule> yArmed      = new HashSet<>();
-    private final Set<ConditionalRule> heightArmed = new HashSet<>();
 
     // Per-rule timestamp of the last auto-response sent (for ON_CHAT_CONTAINS timeout)
     private final Map<ConditionalRule, Long> lastResponseSent = new HashMap<>();
@@ -158,7 +157,6 @@ public class AutoToggle extends Module {
         healthArmed.clear();
         hungerArmed.clear();
         yArmed.clear();
-        heightArmed.clear();
         lastResponseSent.clear();
         prevDimension = mc.world != null ? mc.world.getRegistryKey().getValue().toString() : null;
         prevElytra    = mc.player != null && mc.player.isGliding();
@@ -310,12 +308,11 @@ public class AutoToggle extends Module {
         List<ConditionalRule> rules = conditionalRules.get().rules;
 
         // Drop stale references left by rule edits (rule objects replaced when saved)
-        healthArmed.retainAll(rules);
-        hungerArmed.retainAll(rules);
-        yArmed.retainAll(rules);
-        heightArmed.retainAll(rules);
-        lastResponseSent.keySet().retainAll(rules);
-        pendingReverts.keySet().retainAll(rules);
+        if (!healthArmed.isEmpty())      healthArmed.retainAll(rules);
+        if (!hungerArmed.isEmpty())      hungerArmed.retainAll(rules);
+        if (!yArmed.isEmpty())           yArmed.retainAll(rules);
+        if (!lastResponseSent.isEmpty()) lastResponseSent.keySet().retainAll(rules);
+        if (!pendingReverts.isEmpty())   pendingReverts.keySet().retainAll(rules);
 
         // Timed enables/disables from *_TEMPORARILY and RE_*_SELF_AFTER actions
         if (!pendingEnables.isEmpty() || !pendingDisables.isEmpty()) {
@@ -373,12 +370,9 @@ public class AutoToggle extends Module {
         prevHealth = health;
 
         // Health / Hunger / Y threshold (edge-triggered per rule; mode selects BELOW or ABOVE)
-        applyThresholdTrigger(rules, TriggerType.ON_HEALTH, health, healthArmed);
-        applyThresholdTrigger(rules, TriggerType.ON_HUNGER, mc.player.getHungerManager().getFoodLevel(), hungerArmed);
-        applyThresholdTrigger(rules, TriggerType.ON_Y, y, yArmed);
-
-        // Height trigger (edge-triggered; optional elytra-only guard; supports revert)
-        applyHeightTrigger(rules, y, elytra, heightArmed);
+        applyThresholdTrigger(rules, TriggerType.ON_HEALTH, health, healthArmed, false);
+        applyThresholdTrigger(rules, TriggerType.ON_HUNGER, mc.player.getHungerManager().getFoodLevel(), hungerArmed, false);
+        applyThresholdTrigger(rules, TriggerType.ON_Y, y, yArmed, elytra);
 
         // Dimension change
         if (mc.world != null) {
@@ -423,27 +417,18 @@ public class AutoToggle extends Module {
         }
     }
 
+    // armedSet.add returns true only on re-arm (trigger→safe transition), which is when revert fires.
+    // isGliding is only meaningful for ON_Y rules with triggerElytraOnly; pass false for health/hunger.
     private void applyThresholdTrigger(List<ConditionalRule> rules, TriggerType type, double value,
-                                       Set<ConditionalRule> armedSet) {
+                                       Set<ConditionalRule> armedSet, boolean isGliding) {
         for (ConditionalRule rule : rules) {
             if (rule.triggerType != type) continue;
-            boolean shouldArm = rule.triggerMode == TriggerMode.BELOW
-                ? value > rule.triggerThreshold : value < rule.triggerThreshold;
-            if (shouldArm) armedSet.add(rule);
-            else if (armedSet.remove(rule)) applyRuleToTargets(rule);
-        }
-    }
-
-    private void applyHeightTrigger(List<ConditionalRule> rules, double height, boolean isGliding,
-                                    Set<ConditionalRule> armedSet) {
-        for (ConditionalRule rule : rules) {
-            if (rule.triggerType != TriggerType.ON_HEIGHT) continue;
             if (rule.triggerElytraOnly && !isGliding) {
                 armedSet.remove(rule); // reset so it re-arms cleanly when gliding resumes
                 continue;
             }
             boolean shouldArm = rule.triggerMode == TriggerMode.BELOW
-                ? height > rule.triggerThreshold : height < rule.triggerThreshold;
+                ? value > rule.triggerThreshold : value < rule.triggerThreshold;
             if (shouldArm) {
                 if (armedSet.add(rule) && rule.revertOnTriggerOff) revertRule(rule);
             } else if (armedSet.remove(rule)) {
