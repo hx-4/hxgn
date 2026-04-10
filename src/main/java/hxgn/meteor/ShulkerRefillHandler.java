@@ -579,15 +579,6 @@ public class ShulkerRefillHandler {
         return slots;
     }
 
-    /** Counts empty player slots in the screen handler (slots containerSlots..end). */
-    private int countFreePlayerSlots(ShulkerBoxScreenHandler handler, int containerSlots) {
-        int free = 0;
-        for (int gi = containerSlots; gi < handler.slots.size(); gi++) {
-            if (handler.getSlot(gi).getStack().isEmpty()) free++;
-        }
-        return free;
-    }
-
     /**
      * When the player inventory is full but damaged items remain in the shulker:
      * queues interleaved shift-click pairs — deposit a same-type non-damaged item
@@ -605,12 +596,18 @@ public class ShulkerRefillHandler {
      */
     private int queueSwapDeposit(ShulkerBoxScreenHandler handler, int containerSlots,
                                   List<Integer> damagedSlots, Predicate<ItemStack> itemFilter) {
-        // Collect the item types we want from the shulker
+        // Need at least one free shulker slot to accept the first deposit — check before scanning player
+        boolean hasShulkerRoom = false;
+        for (int i = 0; i < containerSlots; i++) {
+            if (handler.getSlot(i).getStack().isEmpty()) { hasShulkerRoom = true; break; }
+        }
+        if (!hasShulkerRoom) return 0;
+
+        // Collect the item types present among the damaged shulker items
         Set<Item> wantedTypes = new HashSet<>();
         for (int s : damagedSlots) wantedTypes.add(handler.getSlot(s).getStack().getItem());
 
-        // Find player slots that hold the same type but are NOT damaged-mending
-        // (i.e., repaired items of the same kind we can trade away)
+        // Find player slots holding same-type items that are NOT damaged-mending (repaired copies)
         List<Integer> depositCandidates = new ArrayList<>();
         for (int gi = containerSlots; gi < handler.slots.size(); gi++) {
             ItemStack s = handler.getSlot(gi).getStack();
@@ -619,13 +616,6 @@ public class ShulkerRefillHandler {
             }
         }
         if (depositCandidates.isEmpty()) return 0;
-
-        // Need at least one free shulker slot for the first deposit
-        boolean hasShulkerRoom = false;
-        for (int i = 0; i < containerSlots; i++) {
-            if (handler.getSlot(i).getStack().isEmpty()) { hasShulkerRoom = true; break; }
-        }
-        if (!hasShulkerRoom) return 0;
 
         int pairs = Math.min(depositCandidates.size(), damagedSlots.size());
         for (int i = 0; i < pairs; i++) {
