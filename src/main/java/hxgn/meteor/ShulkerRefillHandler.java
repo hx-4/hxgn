@@ -100,6 +100,7 @@ public class ShulkerRefillHandler {
     private boolean placementSent = false;
 
     private long transferPhaseEnteredAt = 0L;
+    private boolean anyTransferQueued   = false; // true once at least one click was queued this session
 
     private CollectPhase collectPhase;
     private boolean pathingStarted = false;
@@ -163,6 +164,7 @@ public class ShulkerRefillHandler {
         placementSent = false;
         shouldDisable = false;
         disableReason = null;
+        anyTransferQueued = false;
         idleRetryAfter = 0L;
         closeSent = false;
         pathingStarted = false;
@@ -314,6 +316,7 @@ public class ShulkerRefillHandler {
                 if (mc.currentScreen instanceof ShulkerBoxScreen) {
                     log.accept("OPENING → TRANSFERRING");
                     transferPhaseEnteredAt = System.currentTimeMillis();
+                    anyTransferQueued = false;
                     enterState(State.TRANSFERRING);
                     yield true;
                 }
@@ -366,6 +369,7 @@ public class ShulkerRefillHandler {
                 // Try to pull damaged items normally (requires free player slots)
                 int queued = queueDamagedFromShulker(handler, containerSlots, itemFilter);
                 if (queued > 0) {
+                    anyTransferQueued = true;
                     log.accept(String.format("TRANSFERRING: queued %d clicks", queued));
                     yield true;
                 }
@@ -384,14 +388,21 @@ public class ShulkerRefillHandler {
                 // into the shulker, and pull damaged items back in interleaved pairs.
                 int swapped = queueSwapDeposit(handler, containerSlots, remaining, itemFilter);
                 if (swapped > 0) {
+                    anyTransferQueued = true;
                     log.accept(String.format("TRANSFERRING: inventory full, queued %d deposit+take pairs", swapped));
                     yield true;
                 }
 
-                // No same-type items available to swap — cannot proceed.
-                log.accept("TRANSFERRING: inventory full, no same-type items to swap → disabling");
-                disableReason = "Inventory is full. Make some more room and try again.";
-                shouldDisable = true;
+                // No same-type items can be swapped. If we transferred anything this session,
+                // a partial transfer is fine — close and let IDLE re-trigger once items are repaired.
+                // Only disable if we got absolutely nothing (truly stuck from the start).
+                if (anyTransferQueued) {
+                    log.accept("TRANSFERRING: inventory full, partial transfer complete → CLOSING");
+                } else {
+                    log.accept("TRANSFERRING: inventory full, no items transferred, no swappable items → disabling");
+                    disableReason = "Inventory is full. Make some more room and try again.";
+                    shouldDisable = true;
+                }
                 enterState(State.CLOSING);
                 yield true;
             }
