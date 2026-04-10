@@ -19,6 +19,7 @@ import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.ItemEntity;
+import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.registry.tag.ItemTags;
 import net.minecraft.screen.ShulkerBoxScreenHandler;
@@ -112,6 +113,7 @@ public class ShulkerRefillHandler {
     private boolean swappedForBreaking     = false;
     private int shulkerCountBeforePlace    = 0;
     private boolean shouldDisable          = false;
+    private String  disableReason          = null;
     private long idleRetryAfter            = 0L;
     private boolean closeSent              = false;
 
@@ -131,8 +133,9 @@ public class ShulkerRefillHandler {
 
     public boolean isActive()           { return state != State.IDLE; }
     public State   getState()           { return state; }
-    public boolean shouldDisable()      { return shouldDisable; }
-    public void    clearShouldDisable() { shouldDisable = false; }
+    public boolean shouldDisable()        { return shouldDisable; }
+    public void    clearShouldDisable()   { shouldDisable = false; }
+    public String  getAndClearDisableReason() { String r = disableReason; disableReason = null; return r; }
 
     /** True when AutoMend should lock camera/movement. False during COLLECTING (Baritone needs control). */
     public boolean wantsMovementLock() {
@@ -159,6 +162,7 @@ public class ShulkerRefillHandler {
         openRetries = 0;
         placementSent = false;
         shouldDisable = false;
+        disableReason = null;
         idleRetryAfter = 0L;
         closeSent = false;
         pathingStarted = false;
@@ -354,17 +358,40 @@ public class ShulkerRefillHandler {
                     yield true;
                 }
 
-                // Wait for dispatcher to drain
+                // Wait for any queued clicks to drain before deciding what to do next
                 if (!transferDispatcher.isEmpty()) {
                     yield true;
                 }
 
+                // Try to pull damaged items normally (requires free player slots)
                 int queued = queueDamagedFromShulker(handler, containerSlots, itemFilter);
                 if (queued > 0) {
                     log.accept(String.format("TRANSFERRING: queued %d clicks", queued));
                     yield true;
                 }
-                log.accept("TRANSFERRING: done → CLOSING");
+
+                // queueDamagedFromShulker returned 0 — either truly done, or inventory is full.
+                // Check whether damaged items remain in the shulker.
+                List<Integer> remaining = findDamagedSlotsInShulker(handler, containerSlots, itemFilter);
+
+                if (remaining.isEmpty()) {
+                    log.accept("TRANSFERRING: done → CLOSING");
+                    enterState(State.CLOSING);
+                    yield true;
+                }
+
+                // Inventory is full. Try to swap same-type (non-damaged) items from player
+                // into the shulker, and pull damaged items back in interleaved pairs.
+                int swapped = queueSwapDeposit(handler, containerSlots, remaining, itemFilter);
+                if (swapped > 0) {
+                    log.accept(String.format("TRANSFERRING: inventory full, queued %d deposit+take pairs", swapped));
+                    yield true;
+                }
+
+                // No same-type items available to swap — cannot proceed.
+                log.accept("TRANSFERRING: inventory full, no same-type items to swap → disabling");
+                disableReason = "Inventory is full. Make some more room and try again.";
+                shouldDisable = true;
                 enterState(State.CLOSING);
                 yield true;
             }
@@ -528,6 +555,73 @@ public class ShulkerRefillHandler {
             }
         }
         return queued;
+    }
+
+    /** Returns the slot indices [0..containerSlots) of shulker slots that pass itemFilter. */
+    private List<Integer> findDamagedSlotsInShulker(ShulkerBoxScreenHandler handler,
+                                                     int containerSlots,
+                                                     Predicate<ItemStack> itemFilter) {
+        List<Integer> slots = new ArrayList<>();
+        for (int i = 0; i < containerSlots; i++) {
+            if (itemFilter.test(handler.getSlot(i).getStack())) slots.add(i);
+        }
+        return slots;
+    }
+
+    /** Counts empty player slots in the screen handler (slots containerSlots..end). */
+    private int countFreePlayerSlots(ShulkerBoxScreenHandler handler, int containerSlots) {
+        int free = 0;
+        for (int gi = containerSlots; gi < handler.slots.size(); gi++) {
+            if (handler.getSlot(gi).getStack().isEmpty()) free++;
+        }
+        return free;
+    }
+
+    /**
+     * When the player inventory is full but damaged items remain in the shulker:
+     * queues interleaved shift-click pairs — deposit a same-type non-damaged item
+     * from the player into the shulker, then immediately pull a damaged item back.
+     *
+     * Each pair is slot-count neutral: the deposit frees one player slot, and the
+     * take fills it again, so the single slot reserved for shulker pickup is preserved
+     * throughout the whole sequence.
+     *
+     * Requires at least one free shulker slot (to accept the first deposit). After that
+     * each take restores the free slot, so one free shulker slot is enough for all pairs.
+     *
+     * @param damagedSlots pre-computed list of shulker slot indices with damaged items
+     * @return number of deposit+take pairs queued (0 = cannot swap)
+     */
+    private int queueSwapDeposit(ShulkerBoxScreenHandler handler, int containerSlots,
+                                  List<Integer> damagedSlots, Predicate<ItemStack> itemFilter) {
+        // Collect the item types we want from the shulker
+        Set<Item> wantedTypes = new HashSet<>();
+        for (int s : damagedSlots) wantedTypes.add(handler.getSlot(s).getStack().getItem());
+
+        // Find player slots that hold the same type but are NOT damaged-mending
+        // (i.e., repaired items of the same kind we can trade away)
+        List<Integer> depositCandidates = new ArrayList<>();
+        for (int gi = containerSlots; gi < handler.slots.size(); gi++) {
+            ItemStack s = handler.getSlot(gi).getStack();
+            if (!s.isEmpty() && wantedTypes.contains(s.getItem()) && !itemFilter.test(s)) {
+                depositCandidates.add(gi);
+            }
+        }
+        if (depositCandidates.isEmpty()) return 0;
+
+        // Need at least one free shulker slot for the first deposit
+        boolean hasShulkerRoom = false;
+        for (int i = 0; i < containerSlots; i++) {
+            if (handler.getSlot(i).getStack().isEmpty()) { hasShulkerRoom = true; break; }
+        }
+        if (!hasShulkerRoom) return 0;
+
+        int pairs = Math.min(depositCandidates.size(), damagedSlots.size());
+        for (int i = 0; i < pairs; i++) {
+            transferDispatcher.enqueueClick(depositCandidates.get(i), true); // player → shulker
+            transferDispatcher.enqueueClick(damagedSlots.get(i), true);      // shulker → player
+        }
+        return pairs;
     }
 
     // ── Counting Utilities ──────────────────────────────────────────────────────

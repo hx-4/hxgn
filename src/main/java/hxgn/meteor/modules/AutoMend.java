@@ -223,9 +223,11 @@ public class AutoMend extends Module {
             prevRefillActive = refillActive;
 
             if (refillHandler.shouldDisable()) {
+                String reason = refillHandler.getAndClearDisableReason();
                 refillHandler.clearShouldDisable();
-                if (autoDisable.get()) {
-                    info("[CleverMend] No more damaged mending items in any shulker, disabling.");
+                if (autoDisable.get() || reason != null) {
+                    info("[CleverMend] " + (reason != null ? reason
+                        : "No more damaged mending items in any shulker, disabling."));
                     toggle();
                     return;
                 }
