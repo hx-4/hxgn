@@ -104,9 +104,7 @@ public class ShulkerRefillHandler {
 
     private CollectPhase collectPhase;
     private boolean pathingStarted = false;
-    private boolean savedAllowBreak = true;
-    private boolean savedAllowPlace = true;
-    private boolean baritoneSettingsOverridden = false;
+    private boolean[] baritoneSnapshot = null; // { allowBreak, allowPlace }; non-null iff overridden
 
     private BlockPos lastEntityTargetPos    = null;
     private int swapTargetHotbarSlot        = -1; // hotbar slot we put the shulker into
@@ -153,7 +151,7 @@ public class ShulkerRefillHandler {
             InvUtils.quickSwap().fromId(swapTargetHotbarSlot).to(swapDisplacedInventorySlot);
         }
         transferDispatcher.clear();
-        if (canBaritone() && baritoneSettingsOverridden) stopBaritone();
+        if (canBaritone()) stopBaritone();
         state = State.IDLE;
         shulkerPos = null;
         originalPos = null;
@@ -823,12 +821,10 @@ public class ShulkerRefillHandler {
             return;
         }
         var settings = BaritoneAPI.getSettings();
-        if (!baritoneSettingsOverridden) {
-            savedAllowBreak = settings.allowBreak.value;
-            savedAllowPlace = settings.allowPlace.value;
+        if (baritoneSnapshot == null) {
+            baritoneSnapshot = new boolean[] { settings.allowBreak.value, settings.allowPlace.value };
             settings.allowBreak.value = false;
             settings.allowPlace.value = false;
-            baritoneSettingsOverridden = true;
         }
 
         BaritoneAPI.getProvider().getPrimaryBaritone()
@@ -838,11 +834,11 @@ public class ShulkerRefillHandler {
     /** Stop pathing and restore Baritone settings. */
     private void stopBaritone() {
         PathManagers.get().stop();
-        if (!BaritoneUtils.IS_AVAILABLE || !baritoneSettingsOverridden) return;
+        if (!BaritoneUtils.IS_AVAILABLE || baritoneSnapshot == null) return;
         var settings = BaritoneAPI.getSettings();
-        settings.allowBreak.value = savedAllowBreak;
-        settings.allowPlace.value = savedAllowPlace;
-        baritoneSettingsOverridden = false;
+        settings.allowBreak.value = baritoneSnapshot[0];
+        settings.allowPlace.value = baritoneSnapshot[1];
+        baritoneSnapshot = null;
     }
 
     // ── State Helpers ───────────────────────────────────────────────────────────

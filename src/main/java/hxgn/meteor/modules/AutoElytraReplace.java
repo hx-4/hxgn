@@ -16,12 +16,6 @@ import net.minecraft.screen.slot.Slot;
 import net.minecraft.text.Text;
 
 
-/*
-
-todo:
-FIX WHEN SWAPPING To good elytra, dont cancel flight!? (either redeploy or figure out what you have to do)
- */
-
 public class AutoElytraReplace extends Module {
 
     // Container slot ID for chest armor in the player's inventory screen handler
