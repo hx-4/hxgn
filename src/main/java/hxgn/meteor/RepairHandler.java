@@ -33,6 +33,10 @@ public class RepairHandler {
         return id >= 9 && id <= 44;
     }
 
+    private static void announceRepaired(ClientPlayerEntity player, ItemStack item) {
+        player.sendMessage(Text.literal("[CleverMend] " + item.getName().getString() + " fully repaired!"), true);
+    }
+
     public void handleArmor(ClientPlayerEntity player, List<Slot> mendingPieces,
                             RegistryEntry<Enchantment> mending, boolean announce, Consumer<String> dbg) {
         List<Slot> movable = mendingPieces.stream().filter(s -> isMovableSlot(s.id)).toList();
@@ -54,8 +58,7 @@ public class RepairHandler {
                             slot.getName(), worn.getName().getString(), worn.getDamage(),
                             toWear.getName().getString(), toWear.getDamage(), candidate.id));
                     if (announce && !worn.isEmpty() && worn.isDamageable()) {
-                        player.sendMessage(
-                                Text.literal("[CleverMend] " + worn.getName().getString() + " fully repaired!"), true);
+                        announceRepaired(player, worn);
                     }
 
                     dispatcher.enqueueSwap(candidate.id, armorSlotId);
@@ -71,10 +74,7 @@ public class RepairHandler {
 
                 dbg.accept(String.format("armor %s: %s repaired, no replacement, unequipping",
                         slot.getName(), worn.getName().getString()));
-                if (announce) {
-                    player.sendMessage(
-                            Text.literal("[CleverMend] " + worn.getName().getString() + " fully repaired!"), true);
-                }
+                if (announce) announceRepaired(player, worn);
                 dispatcher.enqueueClick(armorSlotId, true);
             }
         }
@@ -84,6 +84,8 @@ public class RepairHandler {
                               boolean offhandEnabled, RegistryEntry<Enchantment> mendingHolder,
                               boolean prioritizeTools, boolean announce, Consumer<String> dbg) {
         if (!offhandEnabled) return;
+
+        ItemStack currentOffhand = player.playerScreenHandler.getSlot(OFFHAND_SLOT_ID).getStack();
 
         // Only inventory/hotbar items are valid offhand candidates.
         // Items in armor slots (5–8) are already being repaired there; don't pull them out.
@@ -100,31 +102,23 @@ public class RepairHandler {
             candidate = invTools.get(0);
         } else {
             // No damaged candidates. If offhand holds a now-repaired mending item, unequip it.
-            ItemStack currentOffhand = player.playerScreenHandler.getSlot(OFFHAND_SLOT_ID).getStack();
             if (!currentOffhand.isEmpty() && currentOffhand.isDamageable()
                     && currentOffhand.getDamage() == 0
                     && EnchantmentHelper.getLevel(mendingHolder, currentOffhand) > 0) {
                 dbg.accept("offhand: repaired, no more damaged candidates, unequipping");
-                if (announce) {
-                    player.sendMessage(
-                            Text.literal("[CleverMend] " + currentOffhand.getName().getString() + " fully repaired!"), true);
-                }
+                if (announce) announceRepaired(player, currentOffhand);
                 dispatcher.enqueueClick(OFFHAND_SLOT_ID, true);
             }
             return;
         }
 
-        ItemStack currentOffhand = player.playerScreenHandler.getSlot(OFFHAND_SLOT_ID).getStack();
         boolean offhandHasMendingItem = !currentOffhand.isEmpty()
                 && currentOffhand.isDamageable()
                 && EnchantmentHelper.getLevel(mendingHolder, currentOffhand) > 0;
 
         if (offhandHasMendingItem) {
             if (currentOffhand.getDamage() == 0) {
-                if (announce) {
-                    player.sendMessage(
-                            Text.literal("[CleverMend] " + currentOffhand.getName().getString() + " fully repaired!"), true);
-                }
+                if (announce) announceRepaired(player, currentOffhand);
                 // Direct swap works even when inventory is full (no free slot needed)
                 dbg.accept("offhand: done repairing, swapping with candidate");
                 dispatcher.enqueueSwap(candidate.id, OFFHAND_SLOT_ID);

@@ -6,6 +6,7 @@ import net.minecraft.enchantment.Enchantment;
 import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.enchantment.Enchantments;
 import net.minecraft.entity.EquipmentSlot;
+import net.minecraft.item.ItemStack;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.screen.slot.Slot;
@@ -19,6 +20,11 @@ public final class MendingScanner {
 
     public static RegistryEntry<Enchantment> resolveMending(ClientWorld world) {
         return world.getRegistryManager().getOrThrow(RegistryKeys.ENCHANTMENT).getEntry(Enchantments.MENDING.getValue()).orElseThrow();
+    }
+
+    public static boolean isDamagedMending(RegistryEntry<Enchantment> mending, ItemStack stack) {
+        return stack.isDamageable() && stack.getDamage() > 0
+               && EnchantmentHelper.getLevel(mending, stack) > 0;
     }
 
     public static List<Slot> scan(ClientPlayerEntity player, RegistryEntry<Enchantment> mending) {
