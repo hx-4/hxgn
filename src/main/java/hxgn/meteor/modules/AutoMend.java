@@ -18,7 +18,6 @@ import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.ContainerComponent;
 import net.minecraft.enchantment.Enchantment;
-import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.item.ItemStack;
 import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.registry.tag.ItemTags;
@@ -151,7 +150,7 @@ public class AutoMend extends Module {
     private static final long SWAP_GRACE_MS = 500L;
     private static final Consumer<String> NOOP = s -> {};
 
-    private volatile int damagedCount = 0;
+    private int damagedCount = 0;
 
     public AutoMend() {
         super(HxgnAddon.CATEGORY, "clever-mend", "Wear the most-damaged mending piece so XP repairs it");
@@ -204,7 +203,7 @@ public class AutoMend extends Module {
 
             refillHandler.setLogger(debug.get() ? this::info : NOOP);
             RegistryEntry<Enchantment> mending = MendingScanner.resolveMending(mc.world);
-            Predicate<ItemStack> itemFilter    = stack -> isDamagedMending(mending, stack);
+            Predicate<ItemStack> itemFilter    = stack -> MendingScanner.isDamagedMending(mending, stack);
             Predicate<ItemStack> shulkerMatcher = stack -> {
                 if (!stack.isIn(ItemTags.SHULKER_BOXES)) return false;
                 ContainerComponent c = stack.get(DataComponentTypes.CONTAINER);
@@ -223,9 +222,11 @@ public class AutoMend extends Module {
             prevRefillActive = refillActive;
 
             if (refillHandler.shouldDisable()) {
+                String reason = refillHandler.getAndClearDisableReason();
                 refillHandler.clearShouldDisable();
-                if (autoDisable.get()) {
-                    info("[CleverMend] No more damaged mending items in any shulker, disabling.");
+                if (autoDisable.get() || reason != null) {
+                    info("[CleverMend] " + (reason != null ? reason
+                        : "No more damaged mending items in any shulker, disabling."));
                     toggle();
                     return;
                 }
@@ -276,17 +277,12 @@ public class AutoMend extends Module {
         if (!dispatcher.isEmpty()) swapGraceUntil = System.currentTimeMillis() + SWAP_GRACE_MS;
     }
 
-    private static boolean isDamagedMending(RegistryEntry<Enchantment> mending, ItemStack stack) {
-        return stack.isDamageable() && stack.getDamage() > 0
-               && EnchantmentHelper.getLevel(mending, stack) > 0;
-    }
-
     private static int countDamagedMendingItems(ClientPlayerEntity player,
                                                 RegistryEntry<Enchantment> mending) {
         int count = 0;
         for (Slot s : player.playerScreenHandler.slots) {
             if (s.id < 5 || s.id > 45) continue; // skip crafting slots; include armor/hotbar/offhand
-            if (isDamagedMending(mending, s.getStack())) count++;
+            if (MendingScanner.isDamagedMending(mending, s.getStack())) count++;
         }
         return count;
     }

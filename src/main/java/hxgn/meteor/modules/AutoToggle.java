@@ -27,6 +27,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 public class AutoToggle extends Module {
@@ -238,10 +239,10 @@ public class AutoToggle extends Module {
                 boolean shouldRevert;
                 if (rule.triggerMode == TriggerMode.ACTIVATE) {
                     shouldRevert = rule.triggerModuleIds.stream()
-                        .map(triggerCache::get).filter(m -> m != null).noneMatch(Module::isActive);
+                        .map(triggerCache::get).filter(Objects::nonNull).noneMatch(Module::isActive);
                 } else {
                     shouldRevert = rule.triggerModuleIds.stream()
-                        .map(triggerCache::get).filter(m -> m != null).anyMatch(Module::isActive);
+                        .map(triggerCache::get).filter(Objects::nonNull).anyMatch(Module::isActive);
                 }
                 if (shouldRevert)
                     for (Map.Entry<Module, Boolean> r : entry.getValue().entrySet())
@@ -463,12 +464,7 @@ public class AutoToggle extends Module {
 
         switch (rule.action) {
             case ENABLE -> enable(target);
-            case DISABLE -> {
-                if (target.isActive()) {
-                    target.toggle();
-                    lastKnownState.put(target, false);
-                }
-            }
+            case DISABLE -> disable(target);
             case DISABLE_TEMPORARILY -> {
                 if (target.isActive()) target.toggle();
                 if (rule.turnBackAfterSec > 0)
@@ -491,11 +487,8 @@ public class AutoToggle extends Module {
     }
 
     private void restoreState(Module mod, boolean wasActive) {
-        if (wasActive && !mod.isActive()) enable(mod); // enable() updates lastKnownState
-        else if (!wasActive && mod.isActive()) {
-            mod.toggle();
-            lastKnownState.put(mod, false);
-        }
+        if (wasActive && !mod.isActive()) enable(mod);
+        else if (!wasActive && mod.isActive()) disable(mod);
     }
 
     private boolean checkYMode(ConditionalRule rule, double y) {
@@ -541,6 +534,13 @@ public class AutoToggle extends Module {
         if (!mod.isActive()) {
             mod.toggle();
             lastKnownState.put(mod, true);
+        }
+    }
+
+    private void disable(Module mod) {
+        if (mod.isActive()) {
+            mod.toggle();
+            lastKnownState.put(mod, false);
         }
     }
 }
