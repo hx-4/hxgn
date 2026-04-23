@@ -114,13 +114,6 @@ public class AutoToggle extends Module {
     private final Set<ConditionalRule> hungerArmed = new HashSet<>();
     private final Set<ConditionalRule> yArmed      = new HashSet<>();
 
-    // Validates content between <> is a Minecraft username — rejects timestamps like <16:41>
-    private static final Pattern CHAT_NAME_PATTERN = Pattern.compile("<([a-z0-9_]{1,16})>");
-
-    private static final String WHISPER_MARKER     = " whispers to you: "; // standard
-    private static final String WHISPER_MARKER_ALT = " whispers: ";         // 2b2t
-    private static final String WHISPER_OUT_MARKER = "you whisper to ";     // standard outgoing echo
-
     // Per-rule timestamp of the last auto-response sent (for ON_CHAT_CONTAINS timeout)
     private final Map<ConditionalRule, Long> lastResponseSent = new HashMap<>();
     private String prevDimension = null;
@@ -172,7 +165,7 @@ public class AutoToggle extends Module {
         prevElytra    = mc.player != null && mc.player.isGliding();
         prevSprinting = mc.player != null && mc.player.isSprinting();
         prevDead      = mc.player != null && mc.player.getHealth() <= 0;
-        prevHealth    = mc.player != null ? mc.player.getHealth() : -1f;
+        prevHealth   = mc.player != null ? mc.player.getHealth() : -1f;
 
         // Seed MODULE trigger states
         for (ConditionalRule rule : conditionalRules.get().rules) {
@@ -223,7 +216,7 @@ public class AutoToggle extends Module {
             }
         }
 
-        // Fire MODULE rules on appropriate edge based on triggerMode
+        // Fire MODULE rules on edge: ACTIVATE on rising, DEACTIVATE on falling
         if (!justActivated.isEmpty() || !justDeactivated.isEmpty()) {
             for (ConditionalRule rule : rules) {
                 if (rule.triggerType != TriggerType.MODULE) continue;
@@ -239,8 +232,7 @@ public class AutoToggle extends Module {
             }
         }
 
-        // Revert: ACTIVATE rule reverts when no trigger is active anymore;
-        //         DEACTIVATE rule reverts when any trigger becomes active again.
+        // Revert: ACTIVATE rule reverts when no trigger is active; DEACTIVATE when any becomes active.
         if (!pendingReverts.isEmpty()) {
             pendingReverts.entrySet().removeIf(entry -> {
                 ConditionalRule rule = entry.getKey();
@@ -285,6 +277,14 @@ public class AutoToggle extends Module {
             applyRuleToTargets(rule);
         }
     }
+
+    // Validates content between <> is a Minecraft username — rejects timestamps like <16:41>
+    private static final Pattern CHAT_NAME_PATTERN = Pattern.compile("<([a-z0-9_]{1,16})>");
+
+    private static final String WHISPER_MARKER     = " whispers to you: "; // standard
+    private static final String WHISPER_MARKER_ALT = " whispers: ";         // 2b2t
+    private static final String WHISPER_OUT_MARKER = "you whisper to ";     // standard outgoing echo
+
 
     @EventHandler
     private void onReceiveMessage(ReceiveMessageEvent event) {
@@ -599,7 +599,7 @@ public class AutoToggle extends Module {
         int airBelow = airBlocksBelow();
         if (airBelow == 0) return false;
 
-        float totalFallDist = (float) mc.player.fallDistance + airBelow;
+        float totalFallDist = mc.player.fallDistance + airBelow;
         float rawDamage = Math.max(0, totalFallDist - 3);
         if (rawDamage <= 0) return false;
 

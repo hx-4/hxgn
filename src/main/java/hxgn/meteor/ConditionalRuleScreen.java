@@ -171,7 +171,7 @@ public class ConditionalRuleScreen extends WindowScreen {
                 case ON_ELYTRA, ON_SPRINT                       -> MODES_START_STOP;
                 case ON_BLOCK                                    -> MODES_BREAK_PLACE;
                 case ON_DEATH                                    -> MODES_DIE_RESPAWN;
-                case ON_HEALTH, ON_HUNGER, ON_Y                 -> MODES_BELOW_ABOVE;
+                case ON_HEALTH, ON_HUNGER, ON_Y                  -> MODES_BELOW_ABOVE;
                 default                                          -> null;
             };
         }
@@ -260,7 +260,7 @@ public class ConditionalRuleScreen extends WindowScreen {
                 form.row();
             }
 
-            // Trigger modules (MODULE only) — after mode so user picks Activate/Deactivate first
+            // Trigger modules (MODULE only — placed after mode so you pick activate vs deactivate first)
             if (hasTriggerModules) {
                 addModuleSelector(form, "Trigger module(s):", editTriggerModules, "Select Trigger Modules");
             }
@@ -334,7 +334,7 @@ public class ConditionalRuleScreen extends WindowScreen {
                 threshEdit.action = () -> editTriggerThreshold = threshEdit.get();
                 form.row();
             } else if (editType == TriggerType.ON_Y) {
-                form.add(theme.label("Threshold (Y coordinate, -64 to 320):"));
+                form.add(theme.label("Threshold (Y coordinate):"));
                 WIntEdit threshEdit = form.add(
                     theme.intEdit(editTriggerThreshold, -64, 320, false)).expandX().widget();
                 threshEdit.action = () -> editTriggerThreshold = threshEdit.get();
