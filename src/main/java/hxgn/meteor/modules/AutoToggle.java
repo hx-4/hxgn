@@ -112,7 +112,8 @@ public class AutoToggle extends Module {
     private final Set<ConditionalRule> hungerArmed = new HashSet<>();
     private final Set<ConditionalRule> yArmed      = new HashSet<>();
 
-    private static final String WHISPER_MARKER = " whispers to you: ";
+    private static final String WHISPER_MARKER     = " whispers to you: ";
+    private static final String WHISPER_OUT_MARKER = "you whisper to ";
 
     // Per-rule timestamp of the last auto-response sent (for ON_CHAT_CONTAINS timeout)
     private final Map<ConditionalRule, Long> lastResponseSent = new HashMap<>();
@@ -288,6 +289,9 @@ public class AutoToggle extends Module {
         String msgText    = chatMessageText(text);
         String ownName    = mc.player.getName().getString().toLowerCase();
         if (playerName.equals(ownName)) return;
+
+        // Filter outgoing whisper echoes: "You whisper to <name>: <msg>" (no <> prefix)
+        if (playerName.isEmpty() && text.contains(WHISPER_OUT_MARKER)) return;
 
         // Whisper detection: only attempt if no <name> prefix present (avoids false positives)
         int     whisperIdx        = playerName.isEmpty() ? text.indexOf(WHISPER_MARKER) : -1;
