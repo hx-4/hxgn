@@ -329,7 +329,7 @@ public class ConditionalRuleScreen extends WindowScreen {
             } else if (editType == TriggerType.ON_HUNGER) {
                 form.add(theme.label("Threshold (food level, 0–20):"));
                 WIntEdit threshEdit = form.add(
-                    theme.intEdit(editTriggerThreshold == 0 ? 10 : editTriggerThreshold, 0, 20, false))
+                    theme.intEdit(editTriggerThreshold, 0, 20, false))
                     .expandX().widget();
                 threshEdit.action = () -> editTriggerThreshold = threshEdit.get();
                 form.row();

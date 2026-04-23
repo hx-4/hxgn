@@ -285,7 +285,6 @@ public class AutoToggle extends Module {
     private static final String WHISPER_MARKER_ALT = " whispers: ";         // 2b2t
     private static final String WHISPER_OUT_MARKER = "you whisper to ";     // standard outgoing echo
 
-
     @EventHandler
     private void onReceiveMessage(ReceiveMessageEvent event) {
         if (mc.player == null) return;
@@ -412,11 +411,7 @@ public class AutoToggle extends Module {
                 return false;
             });
             pendingDisables.entrySet().removeIf(entry -> {
-                if (now >= entry.getValue()) {
-                    Module m = entry.getKey();
-                    if (m.isActive()) m.toggle();
-                    return true;
-                }
+                if (now >= entry.getValue()) { disable(entry.getKey()); return true; }
                 return false;
             });
         }
