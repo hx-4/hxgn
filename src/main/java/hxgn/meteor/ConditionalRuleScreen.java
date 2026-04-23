@@ -51,7 +51,8 @@ public class ConditionalRuleScreen extends WindowScreen {
             data.rules.add(new ConditionalRule(
                 TriggerType.MODULE, new ArrayList<>(), TriggerMode.ACTIVATE,
                 "", 0, "", 0,
-                ActionType.DISABLE, new ArrayList<>(), 0, false, YMode.ANY, false));
+                ActionType.DISABLE, new ArrayList<>(), 0, false, YMode.ANY, false,
+                false, false, false, false));
             mc.setScreen(new EditRuleScreen(theme, data, data.rules.size() - 1, this));
         };
     }
@@ -193,6 +194,10 @@ public class ConditionalRuleScreen extends WindowScreen {
         private YMode              editYMode;
         private DimensionOption    editDimension;
         private boolean            editElytraOnly;
+        private boolean            editChatMatchEntire;
+        private boolean            editChatMatchPlayerOnly;
+        private boolean            editChatIncludeWhispers;
+        private boolean            editChatReplyWithWhisper;
 
         public EditRuleScreen(GuiTheme theme, ConditionalRuleList data, int idx,
                               ConditionalRuleScreen parent) {
@@ -216,6 +221,10 @@ public class ConditionalRuleScreen extends WindowScreen {
             this.editYMode                  = r.triggerYMode;
             this.editDimension              = DimensionOption.fromKey(r.triggerText);
             this.editElytraOnly             = r.triggerElytraOnly;
+            this.editChatMatchEntire        = r.chatMatchEntire;
+            this.editChatMatchPlayerOnly    = r.chatMatchPlayerOnly;
+            this.editChatIncludeWhispers    = r.chatIncludeWhispers;
+            this.editChatReplyWithWhisper   = r.chatReplyWithWhisper;
         }
 
         @Override
@@ -262,6 +271,40 @@ public class ConditionalRuleScreen extends WindowScreen {
                 WTextBox keywordBox = form.add(theme.textBox(editTriggerText)).minWidth(200).expandX().widget();
                 keywordBox.action = () -> editTriggerText = keywordBox.get();
                 form.row();
+
+                form.add(theme.label("Match entire message:"));
+                WCheckbox entireBox = form.add(theme.checkbox(editChatMatchEntire)).widget();
+                entireBox.action = () -> {
+                    editChatMatchEntire = entireBox.checked;
+                    if (editChatMatchEntire) editChatMatchPlayerOnly = false;
+                    reload();
+                };
+                form.row();
+
+                form.add(theme.label("Match player name only:"));
+                WCheckbox playerBox = form.add(theme.checkbox(editChatMatchPlayerOnly)).widget();
+                playerBox.action = () -> {
+                    editChatMatchPlayerOnly = playerBox.checked;
+                    if (editChatMatchPlayerOnly) editChatMatchEntire = false;
+                    reload();
+                };
+                form.row();
+
+                form.add(theme.label("Include whispers:"));
+                WCheckbox whispersBox = form.add(theme.checkbox(editChatIncludeWhispers)).widget();
+                whispersBox.action = () -> {
+                    editChatIncludeWhispers = whispersBox.checked;
+                    if (!editChatIncludeWhispers) editChatReplyWithWhisper = false;
+                    reload();
+                };
+                form.row();
+
+                if (editChatIncludeWhispers) {
+                    form.add(theme.label("Reply with whisper:"));
+                    WCheckbox replyWhisperBox = form.add(theme.checkbox(editChatReplyWithWhisper)).widget();
+                    replyWhisperBox.action = () -> editChatReplyWithWhisper = replyWhisperBox.checked;
+                    form.row();
+                }
 
                 form.add(theme.label("Auto-response (leave blank to disable):"));
                 WTextBox responseBox = form.add(theme.textBox(editTriggerResponse)).minWidth(200).expandX().widget();
@@ -414,7 +457,11 @@ public class ConditionalRuleScreen extends WindowScreen {
                     needsDelay  ? editTurnBack : 0,
                     needsRevert ? editRevert   : false,
                     usesYMode   ? editYMode    : YMode.ANY,
-                    editType == TriggerType.ON_Y ? editElytraOnly : false));
+                    editType == TriggerType.ON_Y ? editElytraOnly : false,
+                    isChat ? editChatMatchEntire      : false,
+                    isChat ? editChatMatchPlayerOnly  : false,
+                    isChat ? editChatIncludeWhispers  : false,
+                    isChat ? editChatReplyWithWhisper : false));
                 mc.setScreen(parent);
                 parent.reload();
             };

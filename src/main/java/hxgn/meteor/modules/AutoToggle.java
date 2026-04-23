@@ -276,13 +276,48 @@ public class AutoToggle extends Module {
         }
     }
 
+    private static final String WHISPER_MARKER = " whispers to you: ";
+
     @EventHandler
     private void onReceiveMessage(ReceiveMessageEvent event) {
         if (mc.player == null) return;
-        String text = event.getMessage().getString().toLowerCase();
+        String rawText    = event.getMessage().getString();
+        String text       = rawText.toLowerCase();
+        String playerName = chatPlayerName(text);
+        String msgText    = chatMessageText(text);
+        String ownName    = mc.player.getName().getString().toLowerCase();
+        if (playerName.equals(ownName)) return;
+
+        // Whisper detection: only attempt if no <name> prefix present (avoids false positives)
+        int     whisperIdx        = playerName.isEmpty() ? text.indexOf(WHISPER_MARKER) : -1;
+        boolean isWhisper         = whisperIdx > 0;
+        String  whisperSenderOrig = "";
+        String  whisperSenderLow  = "";
+        String  whisperMsg        = "";
+        if (isWhisper) {
+            String beforeMarker = rawText.substring(0, whisperIdx).trim();
+            int    lastSpace    = beforeMarker.lastIndexOf(' ');
+            whisperSenderOrig = lastSpace >= 0 ? beforeMarker.substring(lastSpace + 1) : beforeMarker;
+            whisperSenderLow  = whisperSenderOrig.toLowerCase();
+            whisperMsg        = text.substring(whisperIdx + WHISPER_MARKER.length()).trim();
+            if (whisperSenderLow.equals(ownName)) return;
+        }
+
         for (ConditionalRule rule : conditionalRules.get().rules) {
             if (rule.triggerType != TriggerType.ON_CHAT_CONTAINS) continue;
-            if (!rule.triggerText.isEmpty() && !text.contains(rule.triggerText.toLowerCase())) continue;
+            if (isWhisper && !rule.chatIncludeWhispers) continue;
+            String keyword     = rule.triggerText.toLowerCase();
+            String matchPlayer = isWhisper ? whisperSenderLow : playerName;
+            String matchMsg    = isWhisper ? whisperMsg        : msgText;
+
+            if (rule.chatMatchPlayerOnly) {
+                if (keyword.isEmpty() || !matchPlayer.contains(keyword)) continue;
+            } else if (rule.chatMatchEntire) {
+                if (!matchMsg.equals(keyword)) continue;
+            } else {
+                String matchFull = isWhisper ? whisperMsg : text;
+                if (!keyword.isEmpty() && !matchFull.contains(keyword)) continue;
+            }
 
             applyRuleToTargets(rule);
 
@@ -291,10 +326,26 @@ public class AutoToggle extends Module {
                 long last = lastResponseSent.getOrDefault(rule, 0L);
                 if (rule.triggerResponseTimeout <= 0 || now - last >= (long) rule.triggerResponseTimeout * 1000L) {
                     lastResponseSent.put(rule, now);
-                    ChatUtils.sendPlayerMsg(rule.triggerResponse);
+                    String response = (rule.chatReplyWithWhisper && isWhisper)
+                        ? "/w " + whisperSenderOrig + " " + rule.triggerResponse
+                        : rule.triggerResponse;
+                    ChatUtils.sendPlayerMsg(response);
                 }
             }
         }
+    }
+
+    private static String chatPlayerName(String text) {
+        int start = text.indexOf('<');
+        int end   = text.indexOf('>');
+        if (start >= 0 && end > start) return text.substring(start + 1, end);
+        return "";
+    }
+
+    private static String chatMessageText(String text) {
+        int end = text.indexOf('>');
+        if (end >= 0 && end + 1 < text.length()) return text.substring(end + 1).trim();
+        return text;
     }
 
     @EventHandler

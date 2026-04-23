@@ -108,6 +108,10 @@ public class ConditionalRuleList implements ICopyable<ConditionalRuleList>, ISer
         public boolean       revertOnTriggerOff; // restore pre-rule state when trigger reverses
         public YMode         triggerYMode;       // ON_ELYTRA only: altitude filter
         public boolean       triggerElytraOnly;  // ON_Y only: only trigger while gliding
+        public boolean       chatMatchEntire;     // ON_CHAT_CONTAINS only
+        public boolean       chatMatchPlayerOnly; // ON_CHAT_CONTAINS only; mutually exclusive with chatMatchEntire
+        public boolean       chatIncludeWhispers; // ON_CHAT_CONTAINS only
+        public boolean       chatReplyWithWhisper; // ON_CHAT_CONTAINS only; requires chatIncludeWhispers
 
         public ConditionalRule(TriggerType triggerType, List<String> triggerModuleIds,
                                TriggerMode triggerMode,
@@ -115,7 +119,9 @@ public class ConditionalRuleList implements ICopyable<ConditionalRuleList>, ISer
                                String triggerResponse, int triggerResponseTimeout,
                                ActionType action, List<String> targetModuleIds,
                                int turnBackAfterSec, boolean revertOnTriggerOff,
-                               YMode triggerYMode, boolean triggerElytraOnly) {
+                               YMode triggerYMode, boolean triggerElytraOnly,
+                               boolean chatMatchEntire, boolean chatMatchPlayerOnly,
+                               boolean chatIncludeWhispers, boolean chatReplyWithWhisper) {
             this.triggerType              = triggerType;
             this.triggerModuleIds         = new ArrayList<>(triggerModuleIds);
             this.triggerMode              = triggerMode != null ? triggerMode : TriggerMode.START;
@@ -129,6 +135,10 @@ public class ConditionalRuleList implements ICopyable<ConditionalRuleList>, ISer
             this.revertOnTriggerOff       = revertOnTriggerOff;
             this.triggerYMode             = triggerYMode != null ? triggerYMode : YMode.ANY;
             this.triggerElytraOnly        = triggerElytraOnly;
+            this.chatMatchEntire          = chatMatchEntire;
+            this.chatMatchPlayerOnly      = chatMatchPlayerOnly;
+            this.chatIncludeWhispers      = chatIncludeWhispers;
+            this.chatReplyWithWhisper     = chatReplyWithWhisper;
         }
 
         public NbtCompound toNbt() {
@@ -150,6 +160,10 @@ public class ConditionalRuleList implements ICopyable<ConditionalRuleList>, ISer
             tag.putBoolean("revert", revertOnTriggerOff);
             tag.putString("triggerYMode", triggerYMode.name());
             tag.putBoolean("elytraOnly", triggerElytraOnly);
+            tag.putBoolean("chatMatchEntire", chatMatchEntire);
+            tag.putBoolean("chatMatchPlayerOnly", chatMatchPlayerOnly);
+            tag.putBoolean("chatIncludeWhispers", chatIncludeWhispers);
+            tag.putBoolean("chatReplyWithWhisper", chatReplyWithWhisper);
             return tag;
         }
 
@@ -227,7 +241,9 @@ public class ConditionalRuleList implements ICopyable<ConditionalRuleList>, ISer
                 tag.getString("triggerResponse"), tag.getInt("triggerResponseTimeout"),
                 action, targets,
                 tag.getInt("turnBack"), tag.getBoolean("revert"), yMode,
-                tag.getBoolean("elytraOnly"));
+                tag.getBoolean("elytraOnly"),
+                tag.getBoolean("chatMatchEntire"), tag.getBoolean("chatMatchPlayerOnly"),
+                tag.getBoolean("chatIncludeWhispers"), tag.getBoolean("chatReplyWithWhisper"));
         }
     }
 
@@ -245,7 +261,9 @@ public class ConditionalRuleList implements ICopyable<ConditionalRuleList>, ISer
                 r.triggerText, r.triggerThreshold,
                 r.triggerResponse, r.triggerResponseTimeout,
                 r.action, r.targetModuleIds, r.turnBackAfterSec, r.revertOnTriggerOff,
-                r.triggerYMode, r.triggerElytraOnly));
+                r.triggerYMode, r.triggerElytraOnly,
+                r.chatMatchEntire, r.chatMatchPlayerOnly,
+                r.chatIncludeWhispers, r.chatReplyWithWhisper));
         }
         return this;
     }
