@@ -29,6 +29,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class AutoToggle extends Module {
     // ── Info Label ────────────────────────────────────────────────────────────
@@ -111,6 +113,9 @@ public class AutoToggle extends Module {
     private final Set<ConditionalRule> healthArmed = new HashSet<>();
     private final Set<ConditionalRule> hungerArmed = new HashSet<>();
     private final Set<ConditionalRule> yArmed      = new HashSet<>();
+
+    // Validates content between <> is a Minecraft username — rejects timestamps like <16:41>
+    private static final Pattern CHAT_NAME_PATTERN = Pattern.compile("<([a-z0-9_]{1,16})>");
 
     private static final String WHISPER_MARKER     = " whispers to you: "; // standard
     private static final String WHISPER_MARKER_ALT = " whispers: ";         // 2b2t
@@ -294,9 +299,8 @@ public class AutoToggle extends Module {
         // Filter outgoing whisper echoes (no <> prefix)
         if (playerName.isEmpty()) {
             if (text.contains(WHISPER_OUT_MARKER)) return; // standard: "You whisper to name: ..."
-            // 2b2t outgoing echo: "to name: ..." — strip optional client-side timestamp first
-            String stripped = text.replaceFirst("^\\{\\d+:\\d+\\}\\s*", "");
-            if (stripped.matches("to [a-z0-9_]{1,16}:.*")) return;
+            // 2b2t outgoing echo: "to name: ..." — strip any leading bracket groups (timestamps)
+            if (stripLeadingBrackets(text).matches("to [a-z0-9_]{1,16}:.*")) return;
         }
 
         // Whisper detection: only attempt if no <name> prefix present (avoids false positives).
@@ -358,16 +362,29 @@ public class AutoToggle extends Module {
     }
 
     private static String chatPlayerName(String text) {
-        int start = text.indexOf('<');
-        int end   = text.indexOf('>');
-        if (start >= 0 && end > start) return text.substring(start + 1, end);
-        return "";
+        Matcher m = CHAT_NAME_PATTERN.matcher(text);
+        return m.find() ? m.group(1) : "";
     }
 
     private static String chatMessageText(String text) {
-        int end = text.indexOf('>');
-        if (end >= 0 && end + 1 < text.length()) return text.substring(end + 1).trim();
-        return text;
+        Matcher m = CHAT_NAME_PATTERN.matcher(text);
+        return m.find() ? text.substring(m.end()).trim() : text;
+    }
+
+    // Strips zero or more leading bracketed groups: [hh:mm], {hh:mm}, (hh:mm), <hh:mm>, etc.
+    private static String stripLeadingBrackets(String text) {
+        String s = text.stripLeading();
+        while (!s.isEmpty()) {
+            char open = s.charAt(0);
+            char close = switch (open) {
+                case '[' -> ']'; case '{' -> '}'; case '(' -> ')'; case '<' -> '>'; default -> 0;
+            };
+            if (close == 0) break;
+            int end = s.indexOf(close);
+            if (end < 0) break;
+            s = s.substring(end + 1).stripLeading();
+        }
+        return s;
     }
 
     @EventHandler
