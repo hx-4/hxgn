@@ -317,7 +317,8 @@ public class AutoToggle extends Module {
             if (rule.chatMatchPlayerOnly) {
                 if (keyword.isEmpty() || !matchPlayer.contains(keyword)) continue;
             } else if (rule.chatMatchEntire) {
-                if (!matchMsg.equals(keyword)) continue;
+                String normalizedMsg = matchMsg.replaceFirst("^>\\s*", "");
+                if (!normalizedMsg.equals(keyword)) continue;
             } else {
                 String matchFull = isWhisper ? whisperMsg : text;
                 if (!keyword.isEmpty() && !matchFull.contains(keyword)) continue;
