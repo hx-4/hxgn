@@ -112,8 +112,9 @@ public class AutoToggle extends Module {
     private final Set<ConditionalRule> hungerArmed = new HashSet<>();
     private final Set<ConditionalRule> yArmed      = new HashSet<>();
 
-    private static final String WHISPER_MARKER     = " whispers to you: ";
-    private static final String WHISPER_OUT_MARKER = "you whisper to ";
+    private static final String WHISPER_MARKER     = " whispers to you: "; // standard
+    private static final String WHISPER_MARKER_ALT = " whispers: ";         // 2b2t
+    private static final String WHISPER_OUT_MARKER = "you whisper to ";     // standard outgoing echo
 
     // Per-rule timestamp of the last auto-response sent (for ON_CHAT_CONTAINS timeout)
     private final Map<ConditionalRule, Long> lastResponseSent = new HashMap<>();
@@ -290,11 +291,28 @@ public class AutoToggle extends Module {
         String ownName    = mc.player.getName().getString().toLowerCase();
         if (playerName.equals(ownName)) return;
 
-        // Filter outgoing whisper echoes: "You whisper to <name>: <msg>" (no <> prefix)
-        if (playerName.isEmpty() && text.contains(WHISPER_OUT_MARKER)) return;
+        // Filter outgoing whisper echoes (no <> prefix)
+        if (playerName.isEmpty()) {
+            if (text.contains(WHISPER_OUT_MARKER)) return; // standard: "You whisper to name: ..."
+            // 2b2t: "{hh:mm} to name: ..." — only match when timestamp prefix is present
+            if (text.startsWith("{")) {
+                String payload = text.replaceFirst("^\\{\\d+:\\d+\\}\\s*", "");
+                if (payload.matches("to \\S+:.*")) return;
+            }
+        }
 
-        // Whisper detection: only attempt if no <name> prefix present (avoids false positives)
-        int     whisperIdx        = playerName.isEmpty() ? text.indexOf(WHISPER_MARKER) : -1;
+        // Whisper detection: only attempt if no <name> prefix present (avoids false positives).
+        // Try standard marker first, fall back to 2b2t variant.
+        int whisperIdx       = -1;
+        int whisperMarkerLen = 0;
+        if (playerName.isEmpty()) {
+            int idx = text.indexOf(WHISPER_MARKER);
+            if (idx > 0) { whisperIdx = idx; whisperMarkerLen = WHISPER_MARKER.length(); }
+            else {
+                idx = text.indexOf(WHISPER_MARKER_ALT);
+                if (idx > 0) { whisperIdx = idx; whisperMarkerLen = WHISPER_MARKER_ALT.length(); }
+            }
+        }
         boolean isWhisper         = whisperIdx > 0;
         String  whisperSenderOrig = "";
         String  whisperSenderLow  = "";
@@ -304,7 +322,7 @@ public class AutoToggle extends Module {
             int    lastSpace    = beforeMarker.lastIndexOf(' ');
             whisperSenderOrig = lastSpace >= 0 ? beforeMarker.substring(lastSpace + 1) : beforeMarker;
             whisperSenderLow  = whisperSenderOrig.toLowerCase();
-            whisperMsg        = text.substring(whisperIdx + WHISPER_MARKER.length()).trim();
+            whisperMsg        = text.substring(whisperIdx + whisperMarkerLen).trim();
             if (whisperSenderLow.equals(ownName)) return;
         }
 
