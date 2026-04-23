@@ -294,11 +294,9 @@ public class AutoToggle extends Module {
         // Filter outgoing whisper echoes (no <> prefix)
         if (playerName.isEmpty()) {
             if (text.contains(WHISPER_OUT_MARKER)) return; // standard: "You whisper to name: ..."
-            // 2b2t: "{hh:mm} to name: ..." — only match when timestamp prefix is present
-            if (text.startsWith("{")) {
-                String payload = text.replaceFirst("^\\{\\d+:\\d+\\}\\s*", "");
-                if (payload.matches("to \\S+:.*")) return;
-            }
+            // 2b2t outgoing echo: "to name: ..." — strip optional client-side timestamp first
+            String stripped = text.replaceFirst("^\\{\\d+:\\d+\\}\\s*", "");
+            if (stripped.matches("to [a-z0-9_]{1,16}:.*")) return;
         }
 
         // Whisper detection: only attempt if no <name> prefix present (avoids false positives).
