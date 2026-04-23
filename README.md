@@ -26,7 +26,13 @@ Future Totem
 
 Auto Toggle
 - Toggles modules on and off automatically based on a customizable set of conditional _rules_
-  -  You can create as many _rules_ as you want. Each _rule_ contains a:
-    - Trigger (module **activation**, **login**, **attacking**, many more) and an
-    - Action (**enable** or **disable** a module _permanently_ or _temporarily_)
+  - You can create as many _rules_ as you want. Each _rule_ contains a:
+    - Trigger (module **activation**, **login**, **attacking**, **elytra**, **sprint**, **block break/place**, **death**, **health**, **hunger**, **Y coordinate**, **dimension change**, **chat contains**) and an
+    - Action (**enable** or **disable** a module _permanently_ or _temporarily_, with optional auto-revert)
+  - **Chat contains** trigger options:
+    - Match entire message — fires only when the message text exactly equals the keyword
+    - Match player name only — fires when the sender's name contains the keyword
+    - Include whispers — also matches incoming whispers (`player whispers to you: ...`)
+    - Reply with whisper — sends the auto-response as a whisper back to the sender (only fires on whisper matches)
+    - Auto-response with per-rule cooldown
 - Smart Totem trigger (fall height prediction & health boundary)
