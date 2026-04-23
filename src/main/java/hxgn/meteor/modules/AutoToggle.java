@@ -599,7 +599,7 @@ public class AutoToggle extends Module {
         int airBelow = airBlocksBelow();
         if (airBelow == 0) return false;
 
-        float totalFallDist = mc.player.fallDistance + airBelow;
+        float totalFallDist = (float) mc.player.fallDistance + airBelow;
         float rawDamage = Math.max(0, totalFallDist - 3);
         if (rawDamage <= 0) return false;
 
