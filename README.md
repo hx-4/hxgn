@@ -36,3 +36,6 @@ Auto Toggle
     - Reply with whisper — sends the auto-response as a whisper back to the sender (only fires on whisper matches)
     - Auto-response with per-rule cooldown
 - Smart Totem trigger (fall height prediction & health boundary)
+
+# Known issues
+- 'Hunger' and 'Health' triggers are missing label texts. They should still work fine, will fix in the next ver.
