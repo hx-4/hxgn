@@ -38,4 +38,4 @@ Auto Toggle
 - Smart Totem trigger (fall height prediction & health boundary)
 
 # Known issues
-- 'Hunger' and 'Health' triggers are missing label texts. They should still work fine, will fix in the next ver.
+- Label texts in the 'Rules' screen for AutoToggle can sometimes disappear. Restarting your game fixes it. Will investigate.
